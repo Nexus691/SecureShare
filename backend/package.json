@@ -1,0 +1,14 @@
+{
+  "name": "secureshare-p2p",
+  "version": "1.0.0",
+  "description": "SecureShare P2P — Phase 1: browser-to-browser file transfer via WebRTC, Socket.io signaling only, zero storage.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}
