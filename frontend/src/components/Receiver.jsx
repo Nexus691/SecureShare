@@ -17,7 +17,7 @@ export default function Receiver({ onBack, initialCode = '' }) {
   const [downloadInfo, setDownloadInfo] = useState(null);
   const [joining, setJoining] = useState(false);
 
-  const { joinRoom } = useReceiver({
+  const { joinRoom, cancelTransfer } = useReceiver({
     onMeta: (meta) => {
       setFileMeta(meta);
       setPhase('receiving');
@@ -95,10 +95,20 @@ export default function Receiver({ onBack, initialCode = '' }) {
         </div>
 
         {statusMsg && (
-          <div className="status-line" id="receive-status-line">
-            {(phase === 'joined' || phase === 'receiving') && <span className="dot pulsing"></span>}
-            {phase === 'done' && <span className="dot connected"></span>}
-            &nbsp;{statusMsg}
+          <div className="status-line" id="receive-status-line" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              {(phase === 'joined' || phase === 'receiving') && <span className="dot pulsing"></span>}
+              {phase === 'done' && <span className="dot connected"></span>}
+              &nbsp;{statusMsg}
+            </div>
+            {(phase === 'joined' || phase === 'receiving') && (
+              <button 
+                onClick={() => { cancelTransfer(); onBack(); }}
+                style={{ background: 'none', border: 'none', color: '#dc3545', fontSize: '13px', cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                Cancel
+              </button>
+            )}
           </div>
         )}
 

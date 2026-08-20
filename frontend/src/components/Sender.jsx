@@ -17,7 +17,7 @@ export default function Sender({ onBack }) {
   const [copied, setCopied] = useState(false);
   const fileInputRef = useRef(null);
 
-  const { createRoom, setFile } = useSender({
+  const { createRoom, setFile, cancelTransfer } = useSender({
     onPeerJoined: () => setStatusMsg('Receiver connected — establishing secure link…'),
     onProgress: (pct) => {
       setProgress(pct);
@@ -110,8 +110,16 @@ export default function Sender({ onBack }) {
           {/* Transfer block */}
           {(phase === 'transferring' || phase === 'done') && (
             <div id="transfer-block">
-              <div className="status-line" id="send-transfer-line">
-                {phase === 'done' ? 'Transfer complete ✓' : 'Sending…'}
+              <div className="status-line" id="send-transfer-line" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>{phase === 'done' ? 'Transfer complete ✓' : 'Sending…'}</span>
+                {phase === 'transferring' && (
+                  <button 
+                    onClick={() => { cancelTransfer(); onBack(); }}
+                    style={{ background: 'none', border: 'none', color: '#dc3545', fontSize: '13px', cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Cancel
+                  </button>
+                )}
               </div>
               <div className="progress-track">
                 <div className="progress-fill" id="send-progress" style={{ width: `${progress}%` }}></div>
