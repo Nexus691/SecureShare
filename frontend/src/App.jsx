@@ -1,21 +1,46 @@
 import { useState, useEffect } from 'react';
 import Sender from './components/Sender';
 import Receiver from './components/Receiver';
+import socket from './socket';
 
 export default function App() {
   const [view, setView] = useState('pick'); // 'pick' | 'send' | 'receive'
   const [initialRoomCode, setInitialRoomCode] = useState('');
+  const [isConnected, setIsConnected] = useState(socket.connected);
 
   useEffect(() => {
+    // Listen for socket connection status
+    const onConnect = () => setIsConnected(true);
+    const onDisconnect = () => setIsConnected(false);
+    
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+
     const params = new URLSearchParams(window.location.search);
     const roomParam = params.get('room');
     if (roomParam) {
       setInitialRoomCode(roomParam.toUpperCase());
       setView('receive');
-      // Clean up the URL so it looks nice
       window.history.replaceState({}, document.title, window.location.pathname);
     }
+
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+    };
   }, []);
+
+  if (!isConnected) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '24px' }}>
+        <div className="dot pulsing" style={{ width: '16px', height: '16px', marginBottom: '24px' }}></div>
+        <h2 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: '24px', marginBottom: '12px', color: 'var(--primary)' }}>Waking up the server...</h2>
+        <p style={{ color: 'var(--on-surface-variant)', fontSize: '15px', maxWidth: '400px', lineHeight: '1.5' }}>
+          Because this is hosted on a free tier, the backend goes to sleep when not in use. It should take about 30–50 seconds to wake up. Hang tight!
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
