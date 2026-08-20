@@ -6,9 +6,17 @@
 import { useEffect, useRef, useCallback } from 'react';
 import socket from '../socket';
 
-const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
-const CHUNK_SIZE = 16 * 1024; // 16 KB
-const BUFFERED_AMOUNT_LOW_THRESHOLD = 1 * 1024 * 1024; // 1 MB
+// We add a free public TURN server just in case STUN fails or is routing poorly over strict NATs
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' }
+];
+
+const CHUNK_SIZE = 16 * 1024; // 16 KB is the safest cross-browser chunk size
+// By lowering this threshold from 1MB to 64KB, the sender's progress bar will accurately
+// track the actual network speed, instead of instantly jumping to 100% while the data
+// sits locally in the browser's internal network queue waiting to be sent out.
+const BUFFERED_AMOUNT_LOW_THRESHOLD = 64 * 1024; // 64 KB
 
 export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) {
   const pcRef = useRef(null);
@@ -97,11 +105,22 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
           channel.send(chunk);
           offset += chunk.byteLength;
 
+          // Only update progress based on what we've queued so far
           const pct = Math.min(100, Math.round((offset / buffer.byteLength) * 100));
           onProgress?.(pct);
         }
-        channel.send(JSON.stringify({ type: 'done' }));
-        onComplete?.();
+        
+        // Wait for the final chunks to clear the buffer before marking as 100% done
+        if (channel.bufferedAmount > 0) {
+          channel.onbufferedamountlow = () => {
+            channel.onbufferedamountlow = null;
+            channel.send(JSON.stringify({ type: 'done' }));
+            onComplete?.();
+          };
+        } else {
+          channel.send(JSON.stringify({ type: 'done' }));
+          onComplete?.();
+        }
       }
 
       channel.bufferedAmountLowThreshold = BUFFERED_AMOUNT_LOW_THRESHOLD / 2;
@@ -110,6 +129,83 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
   }
 
   return { createRoom, setFile };
+}
+
+export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
+  const pcRef = useRef(null);
+  const chunksRef = useRef([]);
+  const receivedBytesRef = useRef(0);
+  const expectedMetaRef = useRef(null);
+  const senderPeerIdRef = useRef(null);
+
+  useEffect(() => {
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    pcRef.current = pc;
+    chunksRef.current = [];
+    receivedBytesRef.current = 0;
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate && senderPeerIdRef.current) {
+        socket.emit('signal', {
+          targetId: senderPeerIdRef.current,
+          data: { type: 'ice', candidate: e.candidate },
+        });
+      }
+    };
+
+    pc.ondatachannel = (event) => {
+      const channel = event.channel;
+      channel.binaryType = 'arraybuffer';
+      channel.onmessage = (ev) => {
+        if (typeof ev.data === 'string') {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === 'meta') {
+            expectedMetaRef.current = msg;
+            onMeta?.(msg);
+          } else if (msg.type === 'done') {
+            const blob = new Blob(chunksRef.current, {
+              type: expectedMetaRef.current?.mime || 'application/octet-stream',
+            });
+            onComplete?.(blob, expectedMetaRef.current?.name || 'download');
+          }
+        } else {
+          chunksRef.current.push(ev.data);
+          receivedBytesRef.current += ev.data.byteLength;
+          const total = expectedMetaRef.current?.size || 1;
+          onProgress?.(Math.min(100, Math.round((receivedBytesRef.current / total) * 100)));
+        }
+      };
+    };
+
+    const handleSignal = async ({ from, data }) => {
+      if (data.type === 'offer') {
+        senderPeerIdRef.current = from;
+        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('signal', { targetId: from, data: { type: 'answer', sdp: answer } });
+      } else if (data.type === 'ice') {
+        try { await pc.addIceCandidate(data.candidate); } catch (_) {}
+      }
+    };
+
+    const handlePeerLeft = ({ role }) => onPeerLeft?.(role);
+
+    socket.on('signal', handleSignal);
+    socket.on('peer-left', handlePeerLeft);
+
+    return () => {
+      socket.off('signal', handleSignal);
+      socket.off('peer-left', handlePeerLeft);
+      pc.close();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const joinRoom = useCallback((code, cb) => {
+    socket.emit('join-room', code, cb);
+  }, []);
+
+  return { joinRoom };
 }
 
 export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
