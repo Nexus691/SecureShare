@@ -1,9 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Sender from './components/Sender';
 import Receiver from './components/Receiver';
 
 export default function App() {
   const [view, setView] = useState('pick'); // 'pick' | 'send' | 'receive'
+  const [initialRoomCode, setInitialRoomCode] = useState('');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const roomParam = params.get('room');
+    if (roomParam) {
+      setInitialRoomCode(roomParam.toUpperCase());
+      setView('receive');
+      // Clean up the URL so it looks nice
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -38,7 +50,7 @@ export default function App() {
         )}
 
         {view === 'send' && <Sender onBack={() => setView('pick')} />}
-        {view === 'receive' && <Receiver onBack={() => setView('pick')} />}
+        {view === 'receive' && <Receiver onBack={() => setView('pick')} initialCode={initialRoomCode} />}
       </main>
 
       <footer className="foot">

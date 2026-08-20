@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useReceiver } from '../hooks/useWebRTC';
 
 function formatBytes(bytes) {
@@ -8,8 +8,8 @@ function formatBytes(bytes) {
   return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
 }
 
-export default function Receiver({ onBack }) {
-  const [code, setCode] = useState('');
+export default function Receiver({ onBack, initialCode = '' }) {
+  const [code, setCode] = useState(initialCode);
   const [phase, setPhase] = useState('idle'); // idle | joined | receiving | done | error
   const [statusMsg, setStatusMsg] = useState('');
   const [fileMeta, setFileMeta] = useState(null);
@@ -33,8 +33,8 @@ export default function Receiver({ onBack }) {
     onPeerLeft: () => setStatusMsg('Sender disconnected.'),
   });
 
-  const handleJoin = () => {
-    const trimmed = code.trim().toUpperCase();
+  const handleJoin = (codeToJoin = code) => {
+    const trimmed = codeToJoin.trim().toUpperCase();
     if (trimmed.length !== 6) {
       setStatusMsg('Enter the 6-character code.');
       return;
@@ -55,6 +55,14 @@ export default function Receiver({ onBack }) {
       setStatusMsg('Waiting for sender to connect…');
     });
   };
+
+  // Auto-join if opened via share link
+  useEffect(() => {
+    if (initialCode && initialCode.length === 6) {
+      handleJoin(initialCode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCode]);
 
   return (
     <section id="receive-view">
@@ -79,7 +87,7 @@ export default function Receiver({ onBack }) {
           <button
             id="join-btn"
             className="btn-primary"
-            onClick={handleJoin}
+            onClick={() => handleJoin()}
             disabled={joining || code.trim().length !== 6}
           >
             Connect

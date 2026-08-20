@@ -14,6 +14,7 @@ export default function Sender({ onBack }) {
   const [progress, setProgress] = useState(0);
   const [statusMsg, setStatusMsg] = useState('Waiting for someone to enter this code…');
   const [dragover, setDragover] = useState(false);
+  const [copied, setCopied] = useState(false);
   const fileInputRef = useRef(null);
 
   const { createRoom, setFile } = useSender({
@@ -41,6 +42,13 @@ export default function Sender({ onBack }) {
     e.preventDefault();
     setDragover(false);
     if (e.dataTransfer.files.length) handleFileSelected(e.dataTransfer.files[0]);
+  };
+
+  const copyLink = () => {
+    const link = `${window.location.origin}/?room=${roomCode}`;
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -82,6 +90,17 @@ export default function Sender({ onBack }) {
             <div id="waiting-block">
               <div className="code-label">Share this code with the receiver</div>
               <div className="room-code" id="room-code">{roomCode}</div>
+              
+              <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                <button 
+                  className="btn-primary" 
+                  onClick={copyLink}
+                  style={{ fontSize: '13px', padding: '8px 16px', background: 'var(--surface-container-low)', color: 'var(--primary)', border: '1px solid var(--outline-variant)' }}
+                >
+                  {copied ? '✓ Copied!' : '🔗 Copy Share Link'}
+                </button>
+              </div>
+
               <div className="status-line" id="send-status-line">
                 <span className="dot pulsing"></span> {statusMsg}
               </div>
