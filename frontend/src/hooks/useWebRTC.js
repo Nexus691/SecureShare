@@ -12,11 +12,10 @@ const ICE_SERVERS = [
   { urls: 'stun:stun1.l.google.com:19302' }
 ];
 
-const CHUNK_SIZE = 16 * 1024; // 16 KB is the safest cross-browser chunk size
-// By lowering this threshold from 1MB to 64KB, the sender's progress bar will accurately
-// track the actual network speed, instead of instantly jumping to 100% while the data
-// sits locally in the browser's internal network queue waiting to be sent out.
-const BUFFERED_AMOUNT_LOW_THRESHOLD = 64 * 1024; // 64 KB
+const CHUNK_SIZE = 16 * 1024; // 16 KB is safest cross-browser
+// Increased threshold back to 2MB. Lowering it too much causes the browser to choke 
+// on event loop wake-ups for large files, freezing the transfer.
+const BUFFERED_AMOUNT_LOW_THRESHOLD = 2 * 1024 * 1024; // 2 MB
 
 export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) {
   const pcRef = useRef(null);
@@ -43,7 +42,6 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
       channelRef.current = channel;
 
       channel.onopen = () => {
-        // file passed via ref below
         sendFile(channel);
       };
 
@@ -60,7 +58,6 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
         }
       };
       socket.on('signal', handleSignal);
-      // Cleanup stored so the effect cleanup can remove it
       pc.__signalHandler = handleSignal;
     };
 
@@ -79,7 +76,6 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // File ref so the channel.onopen closure can access the latest file
   const fileRef = useRef(null);
   const setFile = (f) => { fileRef.current = f; };
 
@@ -91,6 +87,7 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
 
     file.arrayBuffer().then((buffer) => {
       let offset = 0;
+      let lastPct = 0;
 
       function sendNextChunk() {
         while (offset < buffer.byteLength) {
@@ -105,12 +102,14 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
           channel.send(chunk);
           offset += chunk.byteLength;
 
-          // Only update progress based on what we've queued so far
           const pct = Math.min(100, Math.round((offset / buffer.byteLength) * 100));
-          onProgress?.(pct);
+          // CRITICAL: Only update React state if percentage changed to avoid 14,000+ renders!
+          if (pct !== lastPct) {
+            lastPct = pct;
+            onProgress?.(pct);
+          }
         }
         
-        // Wait for the final chunks to clear the buffer before marking as 100% done
         if (channel.bufferedAmount > 0) {
           channel.onbufferedamountlow = () => {
             channel.onbufferedamountlow = null;
@@ -137,12 +136,14 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
   const receivedBytesRef = useRef(0);
   const expectedMetaRef = useRef(null);
   const senderPeerIdRef = useRef(null);
+  const lastPctRef = useRef(0); // Track progress so we don't spam React renders
 
   useEffect(() => {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     pcRef.current = pc;
     chunksRef.current = [];
     receivedBytesRef.current = 0;
+    lastPctRef.current = 0;
 
     pc.onicecandidate = (e) => {
       if (e.candidate && senderPeerIdRef.current) {
@@ -172,7 +173,13 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
           chunksRef.current.push(ev.data);
           receivedBytesRef.current += ev.data.byteLength;
           const total = expectedMetaRef.current?.size || 1;
-          onProgress?.(Math.min(100, Math.round((receivedBytesRef.current / total) * 100)));
+          const pct = Math.min(100, Math.round((receivedBytesRef.current / total) * 100));
+          
+          // CRITICAL: Only update React state if percentage changed
+          if (pct !== lastPctRef.current) {
+            lastPctRef.current = pct;
+            onProgress?.(pct);
+          }
         }
       };
     };
