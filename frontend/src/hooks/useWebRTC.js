@@ -6,10 +6,21 @@
 import { useEffect, useRef, useCallback } from 'react';
 import socket from '../socket';
 
-// We add a free public TURN server just in case STUN fails or is routing poorly over strict NATs
+// We add Google STUN and a free public TURN server (OpenRelay) to guarantee connection 
+// even across strict corporate firewalls, symmetric NATs, or tricky cellular networks.
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' }
+  { urls: 'stun:stun1.l.google.com:19302' },
+  {
+    urls: 'turn:openrelay.metered.ca:80',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  }
 ];
 
 const CHUNK_SIZE = 16 * 1024; // 16 KB is safest cross-browser
@@ -40,7 +51,9 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
       pcRef.current = pc;
 
       pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        // WebRTC can temporarily go into 'disconnected' state while gathering ICE or switching networks.
+        // We only want to kill the transfer if it definitively fails or is closed.
+        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
           onPeerLeft?.('receiver');
         }
       };
