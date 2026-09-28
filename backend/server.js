@@ -54,7 +54,12 @@ const io = new Server(server, {
   transports: ['websocket', 'polling'],
 });
 
-// Connect to MongoDB
+// Lightweight health endpoint for Render's health checks and wake-up requests
+app.get('/health', (req, res) => {
+  res.status(200).json({ ok: true, database: require('mongoose').connection.readyState === 1 ? 'connected' : 'connecting' });
+});
+
+// Connect to MongoDB in the background so the HTTP server can start immediately
 connectDB();
 
 app.use(cors(corsOptions));
