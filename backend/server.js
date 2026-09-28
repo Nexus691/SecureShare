@@ -32,11 +32,19 @@ const allowedOrigins = [
 ];
 const corsOptions = {
   origin: (origin, callback) => {
-    // Reflect the requesting origin to allow credentials, or fallback to true
-    callback(null, origin || true);
+    // Allow all origins, but reflect the specific origin for credentials support
+    // If origin is undefined (e.g., same-origin or non-browser), allow it
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    // Reflect the origin back to support credentials
+    callback(null, origin);
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
   credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
+  exposedHeaders: ["Set-Cookie"],
 };
 
 const io = new Server(server, {
