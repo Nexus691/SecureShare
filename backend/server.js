@@ -41,6 +41,9 @@ const corsOptions = {
 
 const io = new Server(server, {
   cors: corsOptions,
+  // Allow WebSocket upgrades on Render (required for free tier)
+  allowEIO3: true,
+  transports: ['websocket', 'polling'],
 });
 
 // Connect to MongoDB
