@@ -1,4 +1,5 @@
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000/api';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+const API_BASE = import.meta.env.VITE_API_BASE || `${BACKEND_URL.replace(/\/$/, '')}/api`;
 
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
