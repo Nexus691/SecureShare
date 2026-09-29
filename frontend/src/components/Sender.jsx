@@ -9,7 +9,7 @@ function formatBytes(bytes) {
   return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
 }
 
-export default function Sender({ onBack }) {
+export default function Sender({ onBack, selectedFriend = null }) {
   const { user } = useAuth();
   const [file, setFileState] = useState(null);
   const [roomCode, setRoomCode] = useState('------');
@@ -19,8 +19,9 @@ export default function Sender({ onBack }) {
   const [dragover, setDragover] = useState(false);
   const [copied, setCopied] = useState(false);
   const fileInputRef = useRef(null);
+  const [password, setPassword] = useState('');
 
-  const { createRoom, setFile, cancelTransfer } = useSender({
+  const { createRoom, createFriendRoom, setFile, cancelTransfer } = useSender({
     onPeerJoined: () => setStatusMsg('Receiver connected — establishing secure link…'),
     onProgress: (pct) => {
       setProgress(pct);
@@ -37,23 +38,41 @@ export default function Sender({ onBack }) {
           fileName: file.name,
           fileSize: file.size,
           fileType: file.type,
-          role: 'sender',
+          senderId: user?.id,
           status: 'completed'
         }).catch(err => console.error('Failed to log history:', err));
       }
     },
-    onPeerLeft: () => setStatusMsg('Receiver disconnected.'),
+    onPeerLeft: (role) => {
+      if (role === 'declined') {
+        setStatusMsg(`${selectedFriend?.displayName || 'Friend'} declined the file transfer.`);
+        setPhase('done');
+      } else {
+        setStatusMsg('Receiver disconnected.');
+      }
+    },
   });
-
-  const [password, setPassword] = useState('');
 
   const handleFileSelected = useCallback((f) => {
     setFileState(f);
     setFile(f);
     setPhase('waiting');
     setProgress(0);
+
+    if (selectedFriend) {
+      setStatusMsg(`Waiting for ${selectedFriend.displayName} to accept…`);
+      createFriendRoom(f, user?.id, selectedFriend.id, undefined, ({ code, error }) => {
+        if (error) {
+          setStatusMsg(error);
+          return;
+        }
+        setRoomCode(code);
+      });
+      return;
+    }
+
     createRoom(f, user?.id, password || undefined, ({ code }) => setRoomCode(code));
-  }, [createRoom, setFile, user, password]);
+  }, [createRoom, createFriendRoom, setFile, user, password, selectedFriend]);
 
   const handleDrop = (e) => {
     e.preventDefault();
@@ -82,8 +101,28 @@ export default function Sender({ onBack }) {
           onDrop={handleDrop}
         >
           <div className="dz-icon">☁↑</div>
-          <div className="dz-title">Drag and drop a file here</div>
-          <div className="dz-sub">or click to browse</div>
+          <div className="dz-title">{selectedFriend ? `Send a file to ${selectedFriend.displayName}` : 'Drag and drop a file here'}</div>
+          <div className="dz-sub">{selectedFriend ? 'Drop or choose one file — they get a one-click accept notification' : 'or click to browse'}</div>
+          
+          {/* Password input before file selection - hidden for friend transfers */}
+          {!selectedFriend && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--outline-variant)' }}
+            >
+              <label style={{ display: 'block', fontSize: '13px', marginBottom: '8px', color: 'var(--on-surface-variant)' }}>
+                Optional password (leave empty for no password)
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter password to protect this transfer"
+                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--outline-variant)', background: 'var(--surface)', color: 'var(--on-surface)', fontSize: '14px' }}
+              />
+            </div>
+          )}
+          
           <input
             ref={fileInputRef}
             type="file"
@@ -105,31 +144,54 @@ export default function Sender({ onBack }) {
           {/* Waiting block */}
           {phase === 'waiting' && (
             <div id="waiting-block">
-              <div className="code-label">Share this code with the receiver</div>
-              <div className="room-code" id="room-code">{roomCode}</div>
+              {selectedFriend ? (
+                <>
+                  <div className="code-label">Transfer request sent to</div>
+                  <div className="room-code" id="room-code" style={{ fontSize: '24px' }}>{selectedFriend.displayName}</div>
+                </>
+              ) : (
+                <>
+                  <div className="code-label">Share this code with the receiver</div>
+                  <div
+                    className="room-code"
+                    id="room-code"
+                    onClick={() => {
+                      navigator.clipboard.writeText(roomCode);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    style={{ cursor: 'pointer' }}
+                    title="Click to copy code"
+                  >
+                    {roomCode}
+                  </div>
+                  {copied && (
+                    <div style={{ textAlign: 'center', color: 'var(--primary)', fontSize: '12px', marginTop: '-12px', marginBottom: '16px' }}>
+                      Code copied!
+                    </div>
+                  )}
+                </>
+              )}
               
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', marginBottom: '8px', color: 'var(--on-surface-variant)' }}>
-                  Optional password (leave empty for no password)
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password to protect this transfer"
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--outline-variant)', background: 'var(--surface)', color: 'var(--on-surface)', fontSize: '14px' }}
-                />
-              </div>
+              {password && (
+                <div style={{ marginBottom: '16px', padding: '12px', background: '#f0f4ff', borderRadius: '8px', border: '1px solid var(--outline-variant)' }}>
+                  <div style={{ fontSize: '13px', color: 'var(--primary)', fontWeight: 500 }}>
+                    🔒 This transfer is password protected
+                  </div>
+                </div>
+              )}
 
-              <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-                <button
-                  className="btn-primary"
-                  onClick={copyLink}
-                  style={{ fontSize: '13px', padding: '8px 16px', background: 'var(--surface-container-low)', color: 'var(--primary)', border: '1px solid var(--outline-variant)' }}
-                >
-                  {copied ? '✓ Copied!' : '🔗 Copy Share Link'}
-                </button>
-              </div>
+              {!selectedFriend && (
+                <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                  <button
+                    className="btn-primary"
+                    onClick={copyLink}
+                    style={{ fontSize: '13px', padding: '8px 16px', background: 'var(--surface-container-low)', color: 'var(--primary)', border: '1px solid var(--outline-variant)' }}
+                  >
+                    {copied ? '✓ Copied!' : '🔗 Copy Share Link'}
+                  </button>
+                </div>
+              )}
 
               <div className="status-line" id="send-status-line">
                 <span className="dot pulsing"></span> {statusMsg}
@@ -143,7 +205,7 @@ export default function Sender({ onBack }) {
               <div className="status-line" id="send-transfer-line" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>{phase === 'done' ? 'Transfer complete ✓' : 'Sending…'}</span>
                 {phase === 'transferring' && (
-                  <button 
+                  <button
                     onClick={() => { cancelTransfer(); onBack(); }}
                     style={{ background: 'none', border: 'none', color: '#dc3545', fontSize: '13px', cursor: 'pointer', textDecoration: 'underline' }}
                   >

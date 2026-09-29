@@ -225,6 +225,96 @@ io.on("connection", (socket) => {
       io.to(code).emit("peer-left", { role: "receiver" });
     }
   });
+
+  // --- Friend-to-friend file transfer initiation ---
+  socket.on("send-file-to-friend", async ({ friendId, fileMeta, userId, password }, ack) => {
+    try {
+      // Verify friendship exists
+      const Friendship = require("./models/Friendship");
+      const friendship = await Friendship.findOne({
+        $or: [
+          { user1: userId, user2: friendId },
+          { user1: friendId, user2: userId },
+        ],
+        status: "active",
+      });
+      if (!friendship) {
+        ack({ error: "Not friends with this user." });
+        return;
+      }
+
+      // Create room
+      const code = generateRoomCode();
+      let passwordHash = null;
+      if (password) {
+        passwordHash = bcrypt.hashSync(password, 10);
+      }
+      rooms.set(code, {
+        senderSocketId: socket.id,
+        senderUserId: userId || null,
+        intendedReceiverUserId: friendId,
+        createdAt: Date.now(),
+        fileMeta,
+        passwordHash,
+      });
+      socket.join(code);
+      socket.data.role = "sender";
+      socket.data.roomCode = code;
+      if (userId) addUserSocket(userId, socket.id);
+
+      // Send real-time notification to friend
+      const User = require("./models/User");
+      const sender = await User.findById(userId).select("displayName email");
+      emitToUser(friendId, "file-transfer-request", {
+        roomCode: code,
+        fileMeta,
+        fromUser: { id: userId, displayName: sender?.displayName, email: sender?.email },
+        password: password ? true : false, // just indicate if password is set
+      });
+
+      // Also create persistent notification
+      const { createNotification } = require("./routes/notifications");
+      createNotification({
+        userId: friendId,
+        type: "file_transfer_request",
+        title: "Incoming File Transfer",
+        message: `${sender?.displayName || "A friend"} wants to send you "${fileMeta.name}" (${formatBytes(fileMeta.size)})`,
+        data: { roomCode: code, fileMeta, fromUserId: userId },
+      });
+
+      ack({ code });
+    } catch (err) {
+      console.error("send-file-to-friend error:", err);
+      ack({ error: "Server error" });
+    }
+  });
+
+  // --- Receiver responds to file transfer request ---
+  socket.on("file-transfer-response", ({ roomCode, accept, userId }, ack) => {
+    const room = rooms.get(roomCode);
+    if (!room) {
+      ack({ error: "Room not found or expired." });
+      return;
+    }
+    if (!accept) {
+      // Notify sender that transfer was declined
+      io.to(room.senderSocketId).emit("file-transfer-declined", { roomCode });
+      rooms.delete(roomCode);
+      ack({ ok: true });
+      return;
+    }
+    // Accepted - proceed with normal join-room flow
+    // We'll let the normal join-room handler take over
+    ack({ ok: true, proceedToJoin: true });
+  });
+
+  // Helper function for formatting bytes
+  function formatBytes(bytes) {
+    if (!bytes) return '0 B';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  }
 });
 
 const PORT = process.env.PORT || 3000;

@@ -63,7 +63,7 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 // POST /api/history
-// Logs a transfer. Can be called by sender or receiver. 
+// Logs a transfer. Can be called by sender or receiver.
 router.post('/', optionalAuth, async (req, res) => {
   try {
     const { roomCode, fileName, fileSize, fileType, senderId, receiverId, status } = req.body;
@@ -88,8 +88,8 @@ router.post('/', optionalAuth, async (req, res) => {
       fileName,
       fileSize,
       fileType,
-      senderId: senderId || (req.user && req.body.role === 'sender' ? req.user._id : null),
-      receiverId: receiverId || (req.user && req.body.role === 'receiver' ? req.user._id : null),
+      senderId: senderId || (req.user && senderId === undefined ? req.user._id : null),
+      receiverId: receiverId || (req.user && receiverId === undefined ? req.user._id : null),
       status: status || 'completed'
     });
     

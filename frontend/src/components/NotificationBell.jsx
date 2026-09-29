@@ -3,10 +3,10 @@ import { api } from '../lib/api';
 
 function formatDate(dateStr) {
   return new Date(dateStr).toLocaleString(undefined, {
-    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    hour12: true
   });
 }
-
 export default function NotificationBell({ 
   unreadCount, 
   notifications, 
@@ -110,36 +110,80 @@ export default function NotificationBell({
                 No notifications
               </div>
             ) : (
-              notifications.map((n) => (
-                <div 
-                  key={n._id}
-                  style={{
-                    padding: '12px 16px',
-                    borderBottom: '1px solid var(--outline-variant)',
-                    background: n.read ? '#fff' : '#f0f4ff',
-                    cursor: n.read ? 'default' : 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px'
-                  }}
-                  onClick={(e) => !n.read && handleMarkRead(e, n._id)}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ fontWeight: n.read ? 'normal' : '600', fontSize: '14px', color: 'var(--on-surface)' }}>
-                      {n.title}
+              notifications.map((n) => {
+                const isTransferRequest = n.type === 'file_transfer_request';
+                
+                return (
+                  <div
+                    key={n._id}
+                    style={{
+                      padding: '12px 16px',
+                      borderBottom: '1px solid var(--outline-variant)',
+                      background: n.read ? '#fff' : '#f0f4ff',
+                      cursor: n.read && !isTransferRequest ? 'default' : 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px'
+                    }}
+                    onClick={(e) => {
+                      if (!n.read) handleMarkRead(e, n._id);
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ fontWeight: n.read ? 'normal' : '600', fontSize: '14px', color: 'var(--on-surface)' }}>
+                        {n.title}
+                      </div>
+                      {!n.read && (
+                        <div style={{ width: '8px', height: '8px', background: 'var(--primary)', borderRadius: '50%', flexShrink: 0, marginTop: '4px' }} />
+                      )}
                     </div>
-                    {!n.read && (
-                      <div style={{ width: '8px', height: '8px', background: 'var(--primary)', borderRadius: '50%', flexShrink: 0, marginTop: '4px' }} />
+                    <div style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>
+                      {n.message}
+                    </div>
+                    
+                    {isTransferRequest && !n.read && n.data?.roomCode && (
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                        <button
+                          className="btn-primary"
+                          style={{ padding: '4px 12px', fontSize: '12px', flex: 1 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMarkRead(e, n._id);
+                            // We dispatch a custom event to tell App.jsx to jump to this room
+                            window.dispatchEvent(new CustomEvent('accept-transfer', { detail: n.data }));
+                          }}
+                        >
+                          Accept
+                        </button>
+                        <button
+                          style={{
+                            padding: '4px 12px',
+                            fontSize: '12px',
+                            background: 'var(--surface-container-low)',
+                            color: 'var(--on-surface)',
+                            border: '1px solid var(--outline-variant)',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            flex: 1
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMarkRead(e, n._id);
+                            // We dispatch an event so App.jsx can decline via socket
+                            window.dispatchEvent(new CustomEvent('decline-transfer', { detail: n.data }));
+                          }}
+                        >
+                          Decline
+                        </button>
+                      </div>
                     )}
+                    
+                    <div style={{ fontSize: '11px', color: 'var(--on-surface-variant)', marginTop: '4px' }}>
+                      {formatDate(n.createdAt)}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>
-                    {n.message}
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--on-surface-variant)', marginTop: '4px' }}>
-                    {formatDate(n.createdAt)}
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

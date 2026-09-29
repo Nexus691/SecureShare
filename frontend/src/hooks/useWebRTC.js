@@ -42,15 +42,35 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
     }, cb);
   }, []);
 
+  const createFriendRoom = useCallback((file, userId, friendId, password, cb) => {
+    cancelledRef.current = false;
+    socket.emit('send-file-to-friend', {
+      friendId,
+      fileMeta: { name: file.name, size: file.size, type: file.type },
+      userId,
+      password
+    }, cb);
+  }, []);
+
   const cancelTransfer = useCallback(() => {
     cancelledRef.current = true;
     if (pcRef.current) pcRef.current.close();
     onPeerLeft?.('receiver'); // Trigger disconnect UI
   }, [onPeerLeft]);
 
+  // We need to keep a ref to `onPeerJoined` and other callbacks
+  // so the useEffect always calls the latest without needing to recreate the pc
+  const onPeerJoinedRef = useRef(onPeerJoined);
+  const onPeerLeftRef = useRef(onPeerLeft);
+  
+  useEffect(() => {
+    onPeerJoinedRef.current = onPeerJoined;
+    onPeerLeftRef.current = onPeerLeft;
+  }, [onPeerJoined, onPeerLeft]);
+
   useEffect(() => {
     const handlePeerJoined = async ({ peerId, receiverUserId }) => {
-      onPeerJoined?.({ receiverUserId });
+      onPeerJoinedRef.current?.({ receiverUserId });
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
       pcRef.current = pc;
 
@@ -58,7 +78,7 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
         // WebRTC can temporarily go into 'disconnected' state while gathering ICE or switching networks.
         // We only want to kill the transfer if it definitively fails or is closed.
         if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-          onPeerLeft?.('receiver');
+          onPeerLeftRef.current?.('receiver');
         }
       };
 
@@ -77,7 +97,7 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
       };
       
       channel.onclose = () => {
-        onPeerLeft?.('receiver');
+        onPeerLeftRef.current?.('receiver');
       };
 
       const offer = await pc.createOffer();
@@ -96,14 +116,17 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
       pc.__signalHandler = handleSignal;
     };
 
-    const handlePeerLeft = ({ role }) => onPeerLeft?.(role);
+    const handlePeerLeft = ({ role }) => onPeerLeftRef.current?.(role);
+    const handleDeclined = () => onPeerLeftRef.current?.('declined');
 
     socket.on('peer-joined', handlePeerJoined);
     socket.on('peer-left', handlePeerLeft);
+    socket.on('file-transfer-declined', handleDeclined);
 
     return () => {
       socket.off('peer-joined', handlePeerJoined);
       socket.off('peer-left', handlePeerLeft);
+      socket.off('file-transfer-declined', handleDeclined);
       if (pcRef.current?.__signalHandler) {
         socket.off('signal', pcRef.current.__signalHandler);
       }
@@ -113,6 +136,14 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
 
   const fileRef = useRef(null);
   const setFile = (f) => { fileRef.current = f; };
+
+  // Keep refs to callbacks so sendFile always uses the latest
+  const onProgressRef = useRef(onProgress);
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onProgressRef.current = onProgress;
+    onCompleteRef.current = onComplete;
+  }, [onProgress, onComplete]);
 
   function sendFile(channel) {
     const file = fileRef.current;
@@ -150,14 +181,14 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
           // CRITICAL: Only update React state if percentage changed to avoid 14,000+ renders!
           if (pct !== lastPct) {
             lastPct = pct;
-            onProgress?.(pct);
+            onProgressRef.current?.(pct);
           }
         }
         
         const finishTransfer = () => {
           if (cancelledRef.current || channel.readyState !== 'open') return;
           channel.send(JSON.stringify({ type: 'done' }));
-          onComplete?.();
+          onCompleteRef.current?.();
         };
 
         const waitForBufferToDrain = () => {
@@ -177,7 +208,7 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
     });
   }
 
-  return { createRoom, setFile, cancelTransfer };
+  return { createRoom, createFriendRoom, setFile, cancelTransfer };
 }
 
 export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
@@ -187,11 +218,16 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
   const expectedMetaRef = useRef(null);
   const senderPeerIdRef = useRef(null);
   const lastPctRef = useRef(0); // Track progress so we don't spam React renders
+  const callbacksRef = useRef({ onMeta, onProgress, onComplete, onPeerLeft });
+
+  useEffect(() => {
+    callbacksRef.current = { onMeta, onProgress, onComplete, onPeerLeft };
+  }, [onMeta, onProgress, onComplete, onPeerLeft]);
 
   const cancelTransfer = useCallback(() => {
     if (pcRef.current) pcRef.current.close();
-    onPeerLeft?.('sender');
-  }, [onPeerLeft]);
+    callbacksRef.current.onPeerLeft?.('sender');
+  }, []);
 
   useEffect(() => {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
@@ -202,7 +238,7 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
 
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-        onPeerLeft?.('sender');
+        callbacksRef.current.onPeerLeft?.('sender');
       }
     };
 
@@ -219,7 +255,7 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
       const channel = event.channel;
       channel.binaryType = 'arraybuffer';
       channel.onclose = () => {
-        onPeerLeft?.('sender');
+        callbacksRef.current.onPeerLeft?.('sender');
       };
       
       channel.onmessage = (ev) => {
@@ -227,12 +263,12 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
           const msg = JSON.parse(ev.data);
           if (msg.type === 'meta') {
             expectedMetaRef.current = msg;
-            onMeta?.(msg);
+            callbacksRef.current.onMeta?.(msg);
           } else if (msg.type === 'done') {
             const blob = new Blob(chunksRef.current, {
               type: expectedMetaRef.current?.mime || 'application/octet-stream',
             });
-            onComplete?.(blob, expectedMetaRef.current?.name || 'download');
+            callbacksRef.current.onComplete?.(blob, expectedMetaRef.current?.name || 'download');
           }
         } else {
           chunksRef.current.push(ev.data);
@@ -243,7 +279,7 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
           // CRITICAL: Only update React state if percentage changed
           if (pct !== lastPctRef.current) {
             lastPctRef.current = pct;
-            onProgress?.(pct);
+            callbacksRef.current.onProgress?.(pct);
           }
         }
       };
@@ -261,7 +297,7 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
       }
     };
 
-    const handlePeerLeft = ({ role }) => onPeerLeft?.(role);
+    const handlePeerLeft = ({ role }) => callbacksRef.current.onPeerLeft?.(role);
 
     socket.on('signal', handleSignal);
     socket.on('peer-left', handlePeerLeft);

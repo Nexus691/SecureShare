@@ -10,7 +10,7 @@ import { useAuth } from './context/AuthContext';
 import { api } from './lib/api';
 import socket from './socket';
 
-function BrandHeader({ user, onSignOut, tab, onTabChange }) {
+function BrandHeader({ user, onSignOut, tab, onTabChange, unreadCount, notifications, showNotifications, onToggleNotifications, onMarkRead }) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -44,7 +44,14 @@ function BrandHeader({ user, onSignOut, tab, onTabChange }) {
               Friends
             </button>
           </div>
-          <div className="account-controls">
+          <div className="account-controls" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <NotificationBell
+              unreadCount={unreadCount}
+              notifications={notifications}
+              showNotifications={showNotifications}
+              onToggle={onToggleNotifications}
+              onMarkRead={onMarkRead}
+            />
             <span className="account-email">{user.email}</span>
             <button className="auth-link" onClick={onSignOut}>Sign out</button>
           </div>
@@ -73,8 +80,9 @@ function AuthGate() {
 
 function SecureShareApp({ user, onSignOut }) {
   const [tab, setTab] = useState('transfer');
-  const [view, setView] = useState('pick');
+  const [view, setView] = useState('pick'); // pick | send | receive
   const [initialRoomCode, setInitialRoomCode] = useState('');
+  const [selectedFriend, setSelectedFriend] = useState(null);
   const [isConnected, setIsConnected] = useState(socket.connected);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
@@ -83,6 +91,13 @@ function SecureShareApp({ user, onSignOut }) {
   useEffect(() => {
     const onConnect = () => setIsConnected(true);
     const onDisconnect = () => setIsConnected(false);
+    
+    // Listen for file-transfer-request via socket for immediate UI response
+    const onTransferRequest = (data) => {
+      // This allows immediate response even if the DB notification is slightly delayed
+      console.log('Incoming transfer request:', data);
+    };
+
     const onNotification = (data) => {
       setUnreadCount((c) => c + 1);
       setNotifications((n) => [data.notification, ...n]);
@@ -91,6 +106,32 @@ function SecureShareApp({ user, onSignOut }) {
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('notification', onNotification);
+    socket.on('file-transfer-request', onTransferRequest);
+
+    // Listen for custom events from NotificationBell
+    const onAcceptTransfer = (e) => {
+      const { roomCode, password } = e.detail;
+      socket.emit('file-transfer-response', { roomCode, accept: true, userId: user?.id }, (res) => {
+        if (res.error) {
+          alert(res.error);
+        } else if (res.proceedToJoin) {
+          setInitialRoomCode(roomCode);
+          setTab('transfer');
+          setView('receive');
+          setShowNotifications(false);
+        }
+      });
+    };
+    
+    const onDeclineTransfer = (e) => {
+      const { roomCode } = e.detail;
+      socket.emit('file-transfer-response', { roomCode, accept: false, userId: user?.id }, () => {
+        setShowNotifications(false);
+      });
+    };
+
+    window.addEventListener('accept-transfer', onAcceptTransfer);
+    window.addEventListener('decline-transfer', onDeclineTransfer);
 
     if (user) {
       api.getUnreadNotificationCount().then(res => setUnreadCount(res.count)).catch(() => {});
@@ -110,8 +151,11 @@ function SecureShareApp({ user, onSignOut }) {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('notification', onNotification);
+      socket.off('file-transfer-request', onTransferRequest);
+      window.removeEventListener('accept-transfer', onAcceptTransfer);
+      window.removeEventListener('decline-transfer', onDeclineTransfer);
     };
-  }, []);
+  }, [user]);
 
   if (!isConnected) {
     return (
@@ -128,7 +172,20 @@ function SecureShareApp({ user, onSignOut }) {
 
   return (
     <div className="app-shell">
-      <BrandHeader user={user} onSignOut={onSignOut} tab={tab} onTabChange={setTab} />
+      <BrandHeader
+        user={user}
+        onSignOut={onSignOut}
+        tab={tab}
+        onTabChange={setTab}
+        unreadCount={unreadCount}
+        notifications={notifications}
+        showNotifications={showNotifications}
+        onToggleNotifications={() => setShowNotifications(!showNotifications)}
+        onMarkRead={(id) => {
+          setNotifications((n) => n.map((n) => n._id === id ? {...n, read: true} : n));
+          setUnreadCount((c) => Math.max(0, c - 1));
+        }}
+      />
       <main className="wrap" style={{ maxWidth: tab === 'friends' ? '800px' : undefined }}>
         {tab === 'transfer' ? (
           <>
@@ -150,28 +207,25 @@ function SecureShareApp({ user, onSignOut }) {
                 </div>
               </section>
             )}
-            {view === 'send' && <Sender onBack={() => setView('pick')} />}
+            {view === 'send' && <Sender onBack={() => { setView('pick'); setSelectedFriend(null); }} selectedFriend={selectedFriend} />}
             {view === 'receive' && <Receiver onBack={() => setView('pick')} initialCode={initialRoomCode} />}
           </>
         ) : tab === 'history' ? (
           <HistoryView user={user} />
         ) : (
-          <FriendsView user={user} />
+          <FriendsView
+            user={user}
+            onSendFile={(friend) => {
+              setSelectedFriend(friend);
+              setView('send');
+              setTab('transfer');
+            }}
+          />
         )}
       </main>
       {tab === 'transfer' && (
         <footer className="foot">Files never touch a server — this connection is direct, browser to browser.</footer>
       )}
-      <NotificationBell
-        unreadCount={unreadCount}
-        notifications={notifications}
-        showNotifications={showNotifications}
-        onToggle={() => setShowNotifications(!showNotifications)}
-        onMarkRead={(id) => {
-          setNotifications((n) => n.map((n) => n._id === id ? {...n, read: true} : n));
-          setUnreadCount((c) => Math.max(0, c - 1));
-        }}
-      />
     </div>
   );
 }

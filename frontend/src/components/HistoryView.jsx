@@ -53,7 +53,7 @@ export default function HistoryView({ user }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {history.map((record) => {
-            const isSender = record.senderId?._id === user.id;
+            const isSender = record.senderId?._id?.toString() === user?.id?.toString();
             const otherUser = isSender ? record.receiverId : record.senderId;
             const direction = isSender ? 'Sent' : 'Received';
             const icon = isSender ? '↗️' : '↙️';

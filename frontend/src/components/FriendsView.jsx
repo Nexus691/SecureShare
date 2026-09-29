@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 
-export default function FriendsView() {
+export default function FriendsView({ onSendFile }) {
   const [friends, setFriends] = useState([]);
   const [requests, setRequests] = useState({ incoming: [], outgoing: [] });
   const [emailInput, setEmailInput] = useState('');
@@ -63,6 +63,10 @@ export default function FriendsView() {
     }
   };
 
+  const handleSendFile = (friend) => {
+    onSendFile?.(friend);
+  };
+
   const handleRemoveFriend = async (friendId) => {
     if (!confirm('Are you sure you want to remove this friend?')) return;
     try {
@@ -74,58 +78,103 @@ export default function FriendsView() {
   };
 
   if (loading) {
-    return <div className="text-center p-8 text-gray-500">Loading friends...</div>;
+    return (
+      <div style={{ textAlign: 'center', padding: '32px', color: 'var(--on-surface-variant)' }}>
+        Loading friends...
+      </div>
+    );
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-4 space-y-8">
+    <div style={{ maxWidth: '600px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '32px' }}>
       {/* Add Friend Form */}
-      <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Friend</h3>
-        <form onSubmit={sendRequest} className="flex gap-2">
+      <section className="card" style={{ padding: '24px' }}>
+        <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600 }}>Add Friend</h3>
+        <form onSubmit={sendRequest} style={{ display: 'flex', gap: '8px' }}>
           <input
             type="email"
             value={emailInput}
             onChange={(e) => setEmailInput(e.target.value)}
             placeholder="Friend's email address"
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             required
+            style={{
+              flex: 1,
+              padding: '10px 14px',
+              borderRadius: '8px',
+              border: '1px solid var(--outline-variant)',
+              background: 'var(--surface)',
+              color: 'var(--on-surface)',
+              fontSize: '14px',
+              outline: 'none',
+            }}
           />
           <button
             type="submit"
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            className="btn-primary"
+            style={{ padding: '10px 20px', fontSize: '14px', whiteSpace: 'nowrap' }}
           >
             Send Request
           </button>
         </form>
-        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-        {successMsg && <p className="mt-3 text-sm text-green-600">{successMsg}</p>}
+        {error && (
+          <p style={{ marginTop: '12px', fontSize: '13px', color: '#dc3545' }}>{error}</p>
+        )}
+        {successMsg && (
+          <p style={{ marginTop: '12px', fontSize: '13px', color: '#28a745' }}>{successMsg}</p>
+        )}
       </section>
 
-      {/* Pending Requests */}
+      {/* Incoming Requests */}
       {requests.incoming.length > 0 && (
         <section>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
             Incoming Requests
-            <span className="bg-blue-100 text-blue-700 py-0.5 px-2 rounded-full text-xs">{requests.incoming.length}</span>
+            <span style={{
+              background: '#e8f0fe',
+              color: 'var(--primary)',
+              padding: '2px 8px',
+              borderRadius: '10px',
+              fontSize: '12px',
+              fontWeight: 600,
+            }}>
+              {requests.incoming.length}
+            </span>
           </h3>
-          <div className="space-y-3">
-            {requests.incoming.map((req) => (
-              <div key={req.id} className="flex items-center justify-between bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {requests.incoming.map((r) => (
+              <div
+                key={r.id}
+                className="card"
+                style={{
+                  padding: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
                 <div>
-                  <div className="font-medium text-gray-900">{req.from.displayName}</div>
-                  <div className="text-sm text-gray-500">{req.from.email}</div>
+                  <div style={{ fontWeight: 500, fontSize: '15px' }}>{r.from.displayName}</div>
+                  <div style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>{r.from.email}</div>
                 </div>
-                <div className="flex gap-2">
+                <div style={{ display: 'flex', gap: '8px' }}>
                   <button
-                    onClick={() => handleAccept(req.id)}
-                    className="px-4 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                    onClick={() => handleAccept(r.id)}
+                    className="btn-primary"
+                    style={{ padding: '6px 16px', fontSize: '13px' }}
                   >
                     Accept
                   </button>
                   <button
-                    onClick={() => handleDecline(req.id)}
-                    className="px-4 py-1.5 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
+                    onClick={() => handleDecline(r.id)}
+                    style={{
+                      padding: '6px 16px',
+                      fontSize: '13px',
+                      background: 'var(--surface-container-low)',
+                      color: 'var(--on-surface)',
+                      border: '1px solid var(--outline-variant)',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                    }}
                   >
                     Decline
                   </button>
@@ -136,35 +185,107 @@ export default function FriendsView() {
         </section>
       )}
 
+      {/* Outgoing Requests */}
+      {requests.outgoing.length > 0 && (
+        <section>
+          <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: 'var(--on-surface-variant)' }}>
+            Sent Requests
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {requests.outgoing.map((r) => (
+              <div
+                key={r.id}
+                className="card"
+                style={{
+                  padding: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 500, fontSize: '15px' }}>{r.to.displayName}</div>
+                  <div style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>{r.to.email}</div>
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)', fontStyle: 'italic' }}>
+                  Pending…
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Friends List */}
       <section>
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">My Friends</h3>
+        <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600 }}>My Friends</h3>
         {friends.length === 0 ? (
-          <div className="text-center p-8 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-            <p className="text-gray-500">You don't have any friends added yet.</p>
+          <div className="card" style={{ textAlign: 'center', padding: '48px 24px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>👥</div>
+            <h3>No friends yet</h3>
+            <p style={{ color: 'var(--on-surface-variant)' }}>Send a friend request using their email address above.</p>
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {friends.map((friend) => (
-              <div key={friend.id} className="flex items-center justify-between bg-white p-4 rounded-xl border border-gray-100 shadow-sm group">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold shadow-inner">
+              <div
+                key={friend.id}
+                className="card"
+                style={{
+                  padding: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #004ac6, #0066ff)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontWeight: 600,
+                    fontSize: '16px',
+                  }}>
                     {friend.displayName.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <div className="font-medium text-gray-900">{friend.displayName}</div>
-                    <div className="text-xs text-gray-500 truncate max-w-[150px]" title={friend.email}>{friend.email}</div>
+                    <div style={{ fontWeight: 500, fontSize: '15px' }}>{friend.displayName}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)' }}>{friend.email}</div>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleRemoveFriend(friend.id)}
-                  className="opacity-0 group-hover:opacity-100 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                  title="Remove friend"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                </button>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button
+                    onClick={() => handleSendFile(friend)}
+                    className="btn-primary"
+                    style={{ padding: '8px 12px', fontSize: '13px' }}
+                  >
+                    📤 Send File
+                  </button>
+                  <button
+                    onClick={() => handleRemoveFriend(friend.id)}
+                    title="Remove friend"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--on-surface-variant)',
+                      cursor: 'pointer',
+                      padding: '8px',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      opacity: 0.5,
+                      transition: 'opacity 0.2s, color 0.2s',
+                    }}
+                    onMouseEnter={(e) => { e.target.style.opacity = 1; e.target.style.color = '#dc3545'; }}
+                    onMouseLeave={(e) => { e.target.style.opacity = 0.5; e.target.style.color = 'var(--on-surface-variant)'; }}
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
             ))}
           </div>

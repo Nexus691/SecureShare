@@ -43,7 +43,7 @@ export default function Receiver({ onBack, initialCode = '' }) {
           fileName: fileMeta.name,
           fileSize: fileMeta.size,
           fileType: fileMeta.mime || 'application/octet-stream',
-          role: 'receiver',
+          receiverId: user?.id,
           status: 'completed'
         }).catch(err => console.error('Failed to log history:', err));
       }
