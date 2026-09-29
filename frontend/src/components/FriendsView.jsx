@@ -28,6 +28,10 @@ export default function FriendsView({ onSendFile }) {
 
   useEffect(() => {
     loadData();
+    
+    const onRefresh = () => loadData();
+    window.addEventListener('refresh-friends', onRefresh);
+    return () => window.removeEventListener('refresh-friends', onRefresh);
   }, []);
 
   const sendRequest = async (e) => {

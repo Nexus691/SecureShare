@@ -22,25 +22,22 @@ function BrandHeader({ user, onSignOut, tab, onTabChange, unreadCount, notificat
       </div>
       {user ? (
         <>
-          <div className="nav-tabs" style={{ display: 'flex', gap: '1rem', marginLeft: '2rem', flex: 1 }}>
+          <div className="nav-tabs">
             <button
               className={`nav-tab ${tab === 'transfer' ? 'active' : ''}`}
               onClick={() => onTabChange('transfer')}
-              style={{ padding: '0.5rem 1rem', background: tab === 'transfer' ? '#f0f4ff' : 'transparent', color: tab === 'transfer' ? '#004ac6' : '#6b7280', borderRadius: '0.5rem', fontWeight: 500 }}
             >
               Transfer
             </button>
             <button
               className={`nav-tab ${tab === 'history' ? 'active' : ''}`}
               onClick={() => onTabChange('history')}
-              style={{ padding: '0.5rem 1rem', background: tab === 'history' ? '#f0f4ff' : 'transparent', color: tab === 'history' ? '#004ac6' : '#6b7280', borderRadius: '0.5rem', fontWeight: 500 }}
             >
               History
             </button>
             <button
               className={`nav-tab ${tab === 'friends' ? 'active' : ''}`}
               onClick={() => onTabChange('friends')}
-              style={{ padding: '0.5rem 1rem', background: tab === 'friends' ? '#f0f4ff' : 'transparent', color: tab === 'friends' ? '#004ac6' : '#6b7280', borderRadius: '0.5rem', fontWeight: 500 }}
             >
               Friends
             </button>
@@ -125,6 +122,14 @@ function SecureShareApp({ user, onSignOut }) {
     const onNotification = (data) => {
       setUnreadCount((c) => c + 1);
       setNotifications((n) => [data.notification, ...n]);
+      
+      // Auto-refresh relevant views based on notification type
+      if (data.type === 'friend_request' || data.type === 'friend_accepted') {
+        window.dispatchEvent(new CustomEvent('refresh-friends'));
+      }
+      if (data.type === 'history_updated') { // Assuming we add this soon
+        window.dispatchEvent(new CustomEvent('refresh-history'));
+      }
     };
 
     socket.on('connect', onConnect);
@@ -154,8 +159,30 @@ function SecureShareApp({ user, onSignOut }) {
       });
     };
 
+    const onAcceptFriend = async (e) => {
+      const { requestId } = e.detail;
+      try {
+        await api.acceptFriendRequest(requestId);
+        window.dispatchEvent(new CustomEvent('refresh-friends'));
+      } catch (err) {
+        console.error('Failed to accept friend via notification', err);
+      }
+    };
+
+    const onDeclineFriend = async (e) => {
+      const { requestId } = e.detail;
+      try {
+        await api.declineFriendRequest(requestId);
+        window.dispatchEvent(new CustomEvent('refresh-friends'));
+      } catch (err) {
+        console.error('Failed to decline friend via notification', err);
+      }
+    };
+
     window.addEventListener('accept-transfer', onAcceptTransfer);
     window.addEventListener('decline-transfer', onDeclineTransfer);
+    window.addEventListener('accept-friend', onAcceptFriend);
+    window.addEventListener('decline-friend', onDeclineFriend);
 
     if (user) {
       api.getUnreadNotificationCount().then(res => setUnreadCount(res.count)).catch(() => {});
@@ -178,6 +205,8 @@ function SecureShareApp({ user, onSignOut }) {
       socket.off('file-transfer-request', onTransferRequest);
       window.removeEventListener('accept-transfer', onAcceptTransfer);
       window.removeEventListener('decline-transfer', onDeclineTransfer);
+      window.removeEventListener('accept-friend', onAcceptFriend);
+      window.removeEventListener('decline-friend', onDeclineFriend);
     };
   }, [user]);
 

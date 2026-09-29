@@ -112,6 +112,7 @@ export default function NotificationBell({
             ) : (
               notifications.map((n) => {
                 const isTransferRequest = n.type === 'file_transfer_request';
+                const isFriendRequest = n.type === 'friend_request';
                 
                 return (
                   <div
@@ -120,7 +121,7 @@ export default function NotificationBell({
                       padding: '12px 16px',
                       borderBottom: '1px solid var(--outline-variant)',
                       background: n.read ? '#fff' : '#f0f4ff',
-                      cursor: n.read && !isTransferRequest ? 'default' : 'pointer',
+                      cursor: n.read && (!isTransferRequest && !isFriendRequest) ? 'default' : 'pointer',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '4px'
@@ -171,6 +172,41 @@ export default function NotificationBell({
                             handleMarkRead(e, n._id);
                             // We dispatch an event so App.jsx can decline via socket
                             window.dispatchEvent(new CustomEvent('decline-transfer', { detail: n.data }));
+                          }}
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    )}
+
+                    {isFriendRequest && !n.read && n.data?.requestId && (
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                        <button
+                          className="btn-primary"
+                          style={{ padding: '4px 12px', fontSize: '12px', flex: 1 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMarkRead(e, n._id);
+                            window.dispatchEvent(new CustomEvent('accept-friend', { detail: n.data }));
+                          }}
+                        >
+                          Accept
+                        </button>
+                        <button
+                          style={{
+                            padding: '4px 12px',
+                            fontSize: '12px',
+                            background: 'var(--surface-container-low)',
+                            color: 'var(--on-surface)',
+                            border: '1px solid var(--outline-variant)',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            flex: 1
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMarkRead(e, n._id);
+                            window.dispatchEvent(new CustomEvent('decline-friend', { detail: n.data }));
                           }}
                         >
                           Decline

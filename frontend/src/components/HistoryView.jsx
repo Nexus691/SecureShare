@@ -21,6 +21,10 @@ export default function HistoryView({ user }) {
 
   useEffect(() => {
     loadHistory();
+
+    const onRefresh = () => loadHistory();
+    window.addEventListener('refresh-history', onRefresh);
+    return () => window.removeEventListener('refresh-history', onRefresh);
   }, []);
 
   const loadHistory = async () => {
@@ -55,33 +59,38 @@ export default function HistoryView({ user }) {
           {history.map((record) => {
             const isSender = record.senderId?._id?.toString() === user?.id?.toString();
             const otherUser = isSender ? record.receiverId : record.senderId;
-            const direction = isSender ? 'Sent' : 'Received';
+            const direction = isSender ? 'Sent to' : 'Received from';
             const icon = isSender ? '↗️' : '↙️';
             
             return (
-              <div key={record._id} className="card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <div style={{ fontSize: '24px', background: 'var(--surface-container-high)', width: '48px', height: '48px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div key={record._id} className="card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '16px', transition: 'transform 0.2s ease' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+                <div style={{ fontSize: '24px', background: 'var(--surface-container-low)', border: '1px solid var(--outline-variant)', width: '48px', height: '48px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {icon}
                 </div>
                 
                 <div style={{ flex: 1, overflow: 'hidden' }}>
-                  <div style={{ fontWeight: 600, fontSize: '15px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ fontWeight: 600, fontSize: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--on-surface)' }}>
                     {record.fileName}
                   </div>
-                  <div style={{ fontSize: '13px', color: 'var(--on-surface-variant)', display: 'flex', gap: '12px', marginTop: '4px' }}>
-                    <span>{formatBytes(record.fileSize)}</span>
+                  <div style={{ fontSize: '13px', color: 'var(--on-surface-variant)', display: 'flex', gap: '8px', marginTop: '6px', alignItems: 'center' }}>
+                    <span style={{ background: 'var(--surface-container-low)', padding: '2px 6px', borderRadius: '4px' }}>{formatBytes(record.fileSize)}</span>
                     <span>•</span>
                     <span>{formatDate(record.createdAt)}</span>
                   </div>
                 </div>
                 
-                <div style={{ textAlign: 'right', minWidth: '80px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: isSender ? 'var(--primary)' : '#28a745' }}>
+                <div style={{ textAlign: 'right', minWidth: '120px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginBottom: '4px' }}>
                     {direction}
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginTop: '4px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--on-surface)' }}>
                     {otherUser ? otherUser.displayName : 'Anonymous'}
                   </div>
+                  {otherUser && (
+                    <div style={{ fontSize: '11px', color: 'var(--on-surface-variant)', marginTop: '2px' }}>
+                      {otherUser.email}
+                    </div>
+                  )}
                 </div>
               </div>
             );
