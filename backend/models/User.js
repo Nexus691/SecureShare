@@ -19,6 +19,11 @@ const userSchema = new mongoose.Schema({
     trim: true,
     maxlength: 80,
   },
+  photoUrl: {
+    type: String,
+    trim: true,
+    default: '',
+  },
   createdAt: {
     type: Date,
     default: Date.now,

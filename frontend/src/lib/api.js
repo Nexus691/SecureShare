@@ -33,6 +33,11 @@ export const api = {
     request('/auth/logout', { method: 'POST' }),
   me: () =>
     request('/auth/me'),
+  updateProfile: (data) =>
+    request('/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 
   // Friends
   getFriends: () => request('/friends'),
@@ -63,3 +68,5 @@ export const api = {
   markAllNotificationsRead: () => request('/notifications/read-all', { method: 'POST' }),
   deleteNotification: (id) => request(`/notifications/${id}`, { method: 'DELETE' }),
 };
+
+export const updateProfile = (data) => api.updateProfile(data);

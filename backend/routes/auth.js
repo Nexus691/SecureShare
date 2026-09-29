@@ -108,8 +108,42 @@ router.post('/logout', (req, res) => {
 // GET /api/auth/me
 router.get('/me', authMiddleware, (req, res) => {
   res.json({
-    user: { id: req.user._id, email: req.user.email, displayName: req.user.displayName },
+    user: { id: req.user._id, email: req.user.email, displayName: req.user.displayName, photoUrl: req.user.photoUrl },
   });
+});
+
+// PUT /api/auth/profile
+router.put('/profile', authMiddleware, async (req, res) => {
+  try {
+    const { displayName, photoUrl } = req.body;
+    const updates = {};
+    if (displayName !== undefined) {
+      if (!displayName || displayName.trim().length === 0) {
+        return res.status(400).json({ error: 'Display name cannot be empty' });
+      }
+      if (displayName.length > 80) {
+        return res.status(400).json({ error: 'Display name must be 80 characters or less' });
+      }
+      updates.displayName = displayName.trim();
+    }
+    if (photoUrl !== undefined) {
+      updates.photoUrl = photoUrl.trim();
+    }
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    ).select('-passwordHash');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({
+      user: { id: user._id, email: user.email, displayName: user.displayName, photoUrl: user.photoUrl },
+    });
+  } catch (err) {
+    console.error('Update profile error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 module.exports = router;
