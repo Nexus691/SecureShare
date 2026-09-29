@@ -1,9 +1,9 @@
-import React, { useState, useContext, useRef } from 'react';
-import { AuthContext } from '../context/AuthContext';
-import { updateProfile } from '../lib/api';
+import React, { useState, useRef } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { api } from '../lib/api';
 
-const ProfileView = () => {
-  const { user, setUser } = useContext(AuthContext);
+const ProfileView = ({ onClose }) => {
+  const { user, setUser } = useAuth();
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [photoUrl, setPhotoUrl] = useState(user?.photoUrl || '');
   const [isLoading, setIsLoading] = useState(false);
@@ -18,8 +18,8 @@ const ProfileView = () => {
     setSuccess('');
 
     try {
-      const updatedUser = await updateProfile({ displayName, photoUrl });
-      setUser(updatedUser);
+      const updatedUser = await api.updateProfile({ displayName, photoUrl });
+      setUser(updatedUser.user || updatedUser);
       setSuccess('Profile updated successfully');
     } catch (err) {
       setError(err.message || 'Failed to update profile');
@@ -30,11 +30,25 @@ const ProfileView = () => {
 
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      // In a real app, you would upload the file to a storage service
-      // and get a URL back. For this example, we'll just use a placeholder.
-      setPhotoUrl(URL.createObjectURL(file));
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Please choose an image file');
+      return;
     }
+
+    if (file.size > 1024 * 1024) {
+      setError('Profile photo must be 1MB or smaller');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setError('');
+      setPhotoUrl(reader.result);
+    };
+    reader.onerror = () => setError('Could not read the selected image');
+    reader.readAsDataURL(file);
   };
 
   const triggerFileInput = () => {
@@ -43,7 +57,27 @@ const ProfileView = () => {
 
   return (
     <div className="profile-view">
-      <h2>Profile</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <h2 style={{ margin: 0 }}>Profile</h2>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--on-surface-variant)',
+            fontSize: '16px',
+            cursor: 'pointer',
+            padding: '4px 8px',
+            borderRadius: '4px',
+            transition: 'background 0.15s'
+          }}
+          onMouseOver={(e) => e.currentTarget.style.background = 'var(--surface-container-low)'}
+          onMouseOut={(e) => e.currentTarget.style.background = 'none'}
+        >
+          ×
+        </button>
+      </div>
       {error && <div className="error">{error}</div>}
       {success && <div className="success">{success}</div>}
       <form onSubmit={handleSubmit}>

@@ -29,6 +29,7 @@ export function AuthProvider({ children }) {
 
   const value = useMemo(() => ({
     user,
+    setUser,
     loading,
     demoAccountsEnabled,
     signIn: async (email, password) => {

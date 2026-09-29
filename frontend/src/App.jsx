@@ -6,11 +6,12 @@ import SignUpPage from './components/SignUpPage';
 import FriendsView from './components/FriendsView';
 import HistoryView from './components/HistoryView';
 import NotificationBell from './components/NotificationBell';
+import ProfileView from './components/ProfileView';
 import { useAuth } from './context/AuthContext';
 import { api } from './lib/api';
 import socket from './socket';
 
-function BrandHeader({ user, onSignOut, tab, onTabChange, unreadCount, notifications, showNotifications, onToggleNotifications, onMarkRead }) {
+function BrandHeader({ user, onSignOut, tab, onTabChange, unreadCount, notifications, showNotifications, onToggleNotifications, onMarkRead, showProfile, setShowProfile }) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -52,7 +53,29 @@ function BrandHeader({ user, onSignOut, tab, onTabChange, unreadCount, notificat
               onToggle={onToggleNotifications}
               onMarkRead={onMarkRead}
             />
-            <span className="account-email">{user.email}</span>
+            <div
+              className="profile-trigger"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                cursor: 'pointer',
+                padding: '0.25rem 0.5rem',
+                borderRadius: '0.5rem',
+                transition: 'background 0.15s'
+              }}
+              onClick={() => setShowProfile(!showProfile)}
+              title="Profile"
+            >
+              {user.photoUrl ? (
+                <img src={user.photoUrl} alt="Profile" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                <span style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#e5edff', color: '#004ac6', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                  {(user.displayName || 'U').charAt(0).toUpperCase()}
+                </span>
+              )}
+              <span className="account-name">{user.displayName}</span>
+            </div>
             <button className="auth-link" onClick={onSignOut}>Sign out</button>
           </div>
         </>
@@ -83,6 +106,7 @@ function SecureShareApp({ user, onSignOut }) {
   const [view, setView] = useState('pick'); // pick | send | receive
   const [initialRoomCode, setInitialRoomCode] = useState('');
   const [selectedFriend, setSelectedFriend] = useState(null);
+  const [showProfile, setShowProfile] = useState(false);
   const [isConnected, setIsConnected] = useState(socket.connected);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
@@ -185,9 +209,13 @@ function SecureShareApp({ user, onSignOut }) {
           setNotifications((n) => n.map((n) => n._id === id ? {...n, read: true} : n));
           setUnreadCount((c) => Math.max(0, c - 1));
         }}
+        showProfile={showProfile}
+        setShowProfile={setShowProfile}
       />
       <main className="wrap" style={{ maxWidth: tab === 'friends' ? '800px' : undefined }}>
-        {tab === 'transfer' ? (
+        {showProfile ? (
+          <ProfileView onClose={() => setShowProfile(false)} />
+        ) : tab === 'transfer' ? (
           <>
             {view === 'pick' && (
               <section id="mode-picker">
@@ -223,7 +251,7 @@ function SecureShareApp({ user, onSignOut }) {
           />
         )}
       </main>
-      {tab === 'transfer' && (
+      {tab === 'transfer' && !showProfile && (
         <footer className="foot">Files never touch a server — this connection is direct, browser to browser.</footer>
       )}
     </div>
