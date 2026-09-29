@@ -18,6 +18,7 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  // Auth
   register: (email, password, displayName) =>
     request('/auth/register', {
       method: 'POST',
@@ -32,4 +33,33 @@ export const api = {
     request('/auth/logout', { method: 'POST' }),
   me: () =>
     request('/auth/me'),
+
+  // Friends
+  getFriends: () => request('/friends'),
+  getFriendRequests: () => request('/friends/requests'),
+  sendFriendRequest: (email) =>
+    request('/friends/request', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  acceptFriendRequest: (requestId) =>
+    request(`/friends/accept/${requestId}`, { method: 'POST' }),
+  declineFriendRequest: (requestId) =>
+    request(`/friends/decline/${requestId}`, { method: 'POST' }),
+  removeFriend: (friendUserId) =>
+    request(`/friends/${friendUserId}`, { method: 'DELETE' }),
+
+  // History
+  getHistory: () => request('/history'),
+  logHistory: (data) => request('/history', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Notifications
+  getNotifications: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/notifications${query ? `?${query}` : ''}`);
+  },
+  getUnreadNotificationCount: () => request('/notifications/unread-count'),
+  markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: 'POST' }),
+  markAllNotificationsRead: () => request('/notifications/read-all', { method: 'POST' }),
+  deleteNotification: (id) => request(`/notifications/${id}`, { method: 'DELETE' }),
 };

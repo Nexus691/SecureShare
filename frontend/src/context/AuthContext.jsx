@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
+import { registerSocketUser } from '../socket';
 
 const AuthContext = createContext(null);
 const demoAccountsEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEMO_ACCOUNTS === 'true';
@@ -12,7 +13,10 @@ export function AuthProvider({ children }) {
     let mounted = true;
     api.me()
       .then((data) => {
-        if (mounted) setUser(data.user);
+        if (mounted) {
+          setUser(data.user);
+          registerSocketUser(data.user?.id);
+        }
       })
       .catch(() => {
         if (mounted) setUser(null);
@@ -30,11 +34,13 @@ export function AuthProvider({ children }) {
     signIn: async (email, password) => {
       const data = await api.login(email, password);
       setUser(data.user);
+      registerSocketUser(data.user?.id);
       return { error: null };
     },
     signUp: async (email, password, displayName) => {
       const data = await api.register(email, password, displayName);
       setUser(data.user);
+      registerSocketUser(data.user?.id);
       return { error: null };
     },
     signOut: async () => {

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useReceiver } from '../hooks/useWebRTC';
+import { useAuth } from '../context/AuthContext';
+import { api } from '../lib/api';
 
 function formatBytes(bytes) {
   if (!bytes) return '';
@@ -9,13 +11,17 @@ function formatBytes(bytes) {
 }
 
 export default function Receiver({ onBack, initialCode = '' }) {
+  const { user } = useAuth();
   const [code, setCode] = useState(initialCode);
+  const [password, setPassword] = useState('');
   const [phase, setPhase] = useState('idle'); // idle | joined | receiving | done | error
   const [statusMsg, setStatusMsg] = useState('');
   const [fileMeta, setFileMeta] = useState(null);
   const [progress, setProgress] = useState(0);
   const [downloadInfo, setDownloadInfo] = useState(null);
   const [joining, setJoining] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [lastError, setLastError] = useState('');
 
   const { joinRoom, cancelTransfer } = useReceiver({
     onMeta: (meta) => {
@@ -29,6 +35,18 @@ export default function Receiver({ onBack, initialCode = '' }) {
       setProgress(100);
       setPhase('done');
       setStatusMsg('Transfer complete ✓');
+      
+      // Log history
+      if (fileMeta) {
+        api.logHistory({
+          roomCode: code,
+          fileName: fileMeta.name,
+          fileSize: fileMeta.size,
+          fileType: fileMeta.mime || 'application/octet-stream',
+          role: 'receiver',
+          status: 'completed'
+        }).catch(err => console.error('Failed to log history:', err));
+      }
     },
     onPeerLeft: () => setStatusMsg('Sender disconnected.'),
   });
@@ -42,13 +60,15 @@ export default function Receiver({ onBack, initialCode = '' }) {
     setJoining(true);
     setStatusMsg('Connecting…');
 
-    joinRoom(trimmed, (res) => {
+    joinRoom(trimmed, user?.id, password || undefined, (res) => {
       if (res.error) {
         setStatusMsg(res.error);
+        setLastError(res.error);
         setPhase('error');
         setJoining(false);
         return;
       }
+      setLastError('');
       setFileMeta(res.fileMeta);
       setPhase('joined');
       setJoining(false);
@@ -102,13 +122,34 @@ export default function Receiver({ onBack, initialCode = '' }) {
               &nbsp;{statusMsg}
             </div>
             {(phase === 'joined' || phase === 'receiving') && (
-              <button 
+              <button
                 onClick={() => { cancelTransfer(); onBack(); }}
                 style={{ background: 'none', border: 'none', color: '#dc3545', fontSize: '13px', cursor: 'pointer', textDecoration: 'underline' }}
               >
                 Cancel
               </button>
             )}
+          </div>
+        )}
+
+        {phase === 'error' && lastError === 'Invalid password.' && !showPassword && (
+          <div style={{ marginTop: '16px', padding: '16px', background: '#fff3f3', borderRadius: '8px', border: '1px solid #ffcccc' }}>
+            <div style={{ fontWeight: 600, color: '#dc3545', marginBottom: '8px' }}>This transfer is password protected</div>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter password"
+              style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--outline-variant)', background: 'var(--surface)', color: 'var(--on-surface)', fontSize: '14px', marginBottom: '12px' }}
+            />
+            <button
+              className="btn-primary"
+              onClick={() => handleJoin()}
+              disabled={joining || !password}
+              style={{ width: '100%' }}
+            >
+              Unlock Transfer
+            </button>
           </div>
         )}
 

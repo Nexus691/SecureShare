@@ -9,4 +9,9 @@ const socket = io(BACKEND_URL, {
   withCredentials: true,
   transports: ['websocket'], // Force WebSockets to avoid Render's HTTP 429 rate limits on polling
 });
+
+export function registerSocketUser(userId) {
+  if (userId) socket.emit('register-user', userId);
+}
+
 export default socket;

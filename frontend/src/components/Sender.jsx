@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { useSender } from '../hooks/useWebRTC';
+import { useAuth } from '../context/AuthContext';
+import { api } from '../lib/api';
 
 function formatBytes(bytes) {
   if (bytes < 1024) return bytes + ' B';
@@ -8,6 +10,7 @@ function formatBytes(bytes) {
 }
 
 export default function Sender({ onBack }) {
+  const { user } = useAuth();
   const [file, setFileState] = useState(null);
   const [roomCode, setRoomCode] = useState('------');
   const [phase, setPhase] = useState('idle'); // idle | waiting | transferring | done
@@ -26,17 +29,31 @@ export default function Sender({ onBack }) {
     onComplete: () => {
       setProgress(100);
       setPhase('done');
+      
+      // Log history
+      if (file) {
+        api.logHistory({
+          roomCode,
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          role: 'sender',
+          status: 'completed'
+        }).catch(err => console.error('Failed to log history:', err));
+      }
     },
     onPeerLeft: () => setStatusMsg('Receiver disconnected.'),
   });
+
+  const [password, setPassword] = useState('');
 
   const handleFileSelected = useCallback((f) => {
     setFileState(f);
     setFile(f);
     setPhase('waiting');
     setProgress(0);
-    createRoom(f, ({ code }) => setRoomCode(code));
-  }, [createRoom, setFile]);
+    createRoom(f, user?.id, password || undefined, ({ code }) => setRoomCode(code));
+  }, [createRoom, setFile, user, password]);
 
   const handleDrop = (e) => {
     e.preventDefault();
@@ -91,9 +108,22 @@ export default function Sender({ onBack }) {
               <div className="code-label">Share this code with the receiver</div>
               <div className="room-code" id="room-code">{roomCode}</div>
               
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '13px', marginBottom: '8px', color: 'var(--on-surface-variant)' }}>
+                  Optional password (leave empty for no password)
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter password to protect this transfer"
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--outline-variant)', background: 'var(--surface)', color: 'var(--on-surface)', fontSize: '14px' }}
+                />
+              </div>
+
               <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-                <button 
-                  className="btn-primary" 
+                <button
+                  className="btn-primary"
                   onClick={copyLink}
                   style={{ fontSize: '13px', padding: '8px 16px', background: 'var(--surface-container-low)', color: 'var(--primary)', border: '1px solid var(--outline-variant)' }}
                 >

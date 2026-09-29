@@ -33,9 +33,13 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
   const channelRef = useRef(null);
   const cancelledRef = useRef(false);
 
-  const createRoom = useCallback((file, cb) => {
+  const createRoom = useCallback((file, userId, password, cb) => {
     cancelledRef.current = false;
-    socket.emit('create-room', { name: file.name, size: file.size, type: file.type }, cb);
+    socket.emit('create-room', {
+      fileMeta: { name: file.name, size: file.size, type: file.type },
+      userId,
+      password
+    }, cb);
   }, []);
 
   const cancelTransfer = useCallback(() => {
@@ -45,8 +49,8 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
   }, [onPeerLeft]);
 
   useEffect(() => {
-    const handlePeerJoined = async ({ peerId }) => {
-      onPeerJoined?.();
+    const handlePeerJoined = async ({ peerId, receiverUserId }) => {
+      onPeerJoined?.({ receiverUserId });
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
       pcRef.current = pc;
 
@@ -150,17 +154,22 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
           }
         }
         
-        if (channel.bufferedAmount > 0) {
-          channel.onbufferedamountlow = () => {
-            channel.onbufferedamountlow = null;
-            if (cancelledRef.current || channel.readyState !== 'open') return;
-            channel.send(JSON.stringify({ type: 'done' }));
-            onComplete?.();
-          };
-        } else {
+        const finishTransfer = () => {
+          if (cancelledRef.current || channel.readyState !== 'open') return;
           channel.send(JSON.stringify({ type: 'done' }));
           onComplete?.();
-        }
+        };
+
+        const waitForBufferToDrain = () => {
+          if (cancelledRef.current || channel.readyState !== 'open') return;
+          if (channel.bufferedAmount === 0) {
+            finishTransfer();
+            return;
+          }
+          setTimeout(waitForBufferToDrain, 50);
+        };
+
+        waitForBufferToDrain();
       }
 
       channel.bufferedAmountLowThreshold = BUFFERED_AMOUNT_LOW_THRESHOLD / 2;
@@ -264,8 +273,8 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const joinRoom = useCallback((code, cb) => {
-    socket.emit('join-room', code, cb);
+  const joinRoom = useCallback((code, userId, password, cb) => {
+    socket.emit('join-room', { code, userId, password }, cb);
   }, []);
 
   return { joinRoom, cancelTransfer };

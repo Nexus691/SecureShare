@@ -15,30 +15,45 @@ const http = require("http");
 const { Server } = require("socket.io");
 const path = require("path");
 const crypto = require("crypto");
+const bcrypt = require("bcryptjs");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/auth");
+const friendsRoutes = require("./routes/friends");
+const historyRoutes = require("./routes/history");
+const { router: notificationsRoutes } = require("./routes/notifications");
 
 const app = express();
 const server = http.createServer(app);
 
 // Allow multiple origins: the specific FRONTEND_URL environment variable,
-// any Vercel deployment URL (ending in .vercel.app), and localhost for development.
+// any Vercel deployment URL (ending in .vercel.app), any Render URL (ending in .onrender.com),
+// and localhost for development (any port).
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:5173",
+  "http://localhost:5174",
 ];
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow all origins, but reflect the specific origin for credentials support
-    // If origin is undefined (e.g., same-origin or non-browser), allow it
+    // Allow all origins in development, reflect specific origin for credentials
     if (!origin) {
       callback(null, true);
       return;
     }
-    // Reflect the origin back to support credentials
+    // Allow any localhost port during development
+    if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+      callback(null, origin);
+      return;
+    }
+    // Allow configured origins and known deployment domains
+    if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || origin.endsWith('.onrender.com')) {
+      callback(null, origin);
+      return;
+    }
+    // Default: reflect origin (allows credentials)
     callback(null, origin);
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
@@ -68,10 +83,45 @@ app.use(cookieParser());
 
 // Auth API routes
 app.use("/api/auth", authRoutes);
+app.use("/api/friends", friendsRoutes);
+app.use("/api/history", historyRoutes);
+app.use("/api/notifications", notificationsRoutes);
 
 // In-memory room registry: { code: { senderSocketId, createdAt } }
 const rooms = new Map();
 const ROOM_TTL_MS = 10 * 60 * 1000; // rooms expire after 10 minutes if unused
+
+// User ID -> Set of socket IDs (for real-time notifications)
+const userSockets = new Map();
+
+function addUserSocket(userId, socketId) {
+  if (!userId) return;
+  const key = userId.toString();
+  if (!userSockets.has(key)) userSockets.set(key, new Set());
+  userSockets.get(key).add(socketId);
+}
+
+function removeUserSocket(userId, socketId) {
+  if (!userId) return;
+  const key = userId.toString();
+  const set = userSockets.get(key);
+  if (set) {
+    set.delete(socketId);
+    if (set.size === 0) userSockets.delete(key);
+  }
+}
+
+function emitToUser(userId, event, data) {
+  if (!userId) return;
+  const key = userId.toString();
+  const socketIds = userSockets.get(key);
+  if (socketIds) {
+    socketIds.forEach((sid) => io.to(sid).emit(event, data));
+  }
+}
+
+// Make emitToUser accessible to route handlers via app.locals
+app.locals.emitToUser = emitToUser;
 
 function generateRoomCode() {
   // 6-character, easy to read aloud/type, avoids ambiguous chars (0/O, 1/I)
@@ -94,34 +144,61 @@ setInterval(() => {
 }, 60 * 1000);
 
 io.on("connection", (socket) => {
+  // Register user for real-time notifications
+  socket.on("register-user", (userId) => {
+    if (userId) {
+      socket.data.userId = userId;
+      addUserSocket(userId, socket.id);
+    }
+  });
+
   // --- Sender creates a room ---
-  socket.on("create-room", (fileMeta, ack) => {
+  socket.on("create-room", ({ fileMeta, userId, password }, ack) => {
     const code = generateRoomCode();
+    let passwordHash = null;
+    if (password) {
+      passwordHash = bcrypt.hashSync(password, 10);
+    }
     rooms.set(code, {
       senderSocketId: socket.id,
+      senderUserId: userId || null,
       createdAt: Date.now(),
       fileMeta, // { name, size, type } — metadata only, no bytes
+      passwordHash,
     });
     socket.join(code);
     socket.data.role = "sender";
     socket.data.roomCode = code;
+    if (userId) addUserSocket(userId, socket.id);
     ack({ code });
   });
 
   // --- Receiver joins a room by code ---
-  socket.on("join-room", (code, ack) => {
+  socket.on("join-room", ({ code, userId, password }, ack) => {
     const room = rooms.get(code);
     if (!room) {
       ack({ error: "Room not found or expired." });
       return;
     }
+    if (room.passwordHash) {
+      if (!password || !bcrypt.compareSync(password, room.passwordHash)) {
+        ack({ error: "Invalid password." });
+        return;
+      }
+    }
+    if (userId) {
+      room.receiverUserId = userId;
+    }
     socket.join(code);
     socket.data.role = "receiver";
     socket.data.roomCode = code;
-    ack({ ok: true, fileMeta: room.fileMeta });
+    if (userId) addUserSocket(userId, socket.id);
+    
+    // Provide sender and receiver info to both parties
+    ack({ ok: true, fileMeta: room.fileMeta, senderUserId: room.senderUserId });
 
     // Tell the sender a receiver has arrived so it can start the WebRTC offer
-    io.to(room.senderSocketId).emit("peer-joined", { peerId: socket.id });
+    io.to(room.senderSocketId).emit("peer-joined", { peerId: socket.id, receiverUserId: room.receiverUserId });
   });
 
   // --- Relay WebRTC signaling data (SDP offer/answer, ICE candidates) ---
@@ -137,6 +214,9 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     const code = socket.data.roomCode;
+    const userId = socket.data.userId;
+    if (userId) removeUserSocket(userId, socket.id);
+    
     if (code && rooms.has(code) && rooms.get(code).senderSocketId === socket.id) {
       // Sender left — room is no longer valid
       io.to(code).emit("peer-left", { role: "sender" });
