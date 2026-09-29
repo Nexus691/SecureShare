@@ -11,7 +11,7 @@ import { useAuth } from './context/AuthContext';
 import { api } from './lib/api';
 import socket from './socket';
 
-function BrandHeader({ user, onSignOut, tab, onTabChange, unreadCount, notifications, showNotifications, onToggleNotifications, onMarkRead, showProfile, setShowProfile }) {
+function BrandHeader({ user, onSignOut, tab, onTabChange, unreadCount, notifications, showNotifications, onToggleNotifications, onMarkRead }) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -41,6 +41,12 @@ function BrandHeader({ user, onSignOut, tab, onTabChange, unreadCount, notificat
             >
               Friends
             </button>
+          <button
+            className={`nav-tab ${tab === 'profile' ? 'active' : ''}`}
+            onClick={() => onTabChange('profile')}
+          >
+            Profile
+          </button>
           </div>
           <div className="account-controls" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <NotificationBell
@@ -50,20 +56,7 @@ function BrandHeader({ user, onSignOut, tab, onTabChange, unreadCount, notificat
               onToggle={onToggleNotifications}
               onMarkRead={onMarkRead}
             />
-            <div
-              className="profile-trigger"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                cursor: 'pointer',
-                padding: '0.25rem 0.5rem',
-                borderRadius: '0.5rem',
-                transition: 'background 0.15s'
-              }}
-              onClick={() => setShowProfile(!showProfile)}
-              title="Profile"
-            >
+            <div className="profile-trigger" onClick={() => onTabChange('profile')} title="Profile">
               {user.photoUrl ? (
                 <img src={user.photoUrl} alt="Profile" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
               ) : (
@@ -103,7 +96,6 @@ function SecureShareApp({ user, onSignOut }) {
   const [view, setView] = useState('pick'); // pick | send | receive
   const [initialRoomCode, setInitialRoomCode] = useState('');
   const [selectedFriend, setSelectedFriend] = useState(null);
-  const [showProfile, setShowProfile] = useState(false);
   const [isConnected, setIsConnected] = useState(socket.connected);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
@@ -126,6 +118,8 @@ function SecureShareApp({ user, onSignOut }) {
       // Auto-refresh relevant views based on notification type
       if (data.type === 'friend_request' || data.type === 'friend_accepted') {
         window.dispatchEvent(new CustomEvent('refresh-friends'));
+      } else if (data.type === 'history_updated') {
+        window.dispatchEvent(new CustomEvent('refresh-history'));
       }
       if (data.type === 'history_updated') { // Assuming we add this soon
         window.dispatchEvent(new CustomEvent('refresh-history'));
@@ -238,12 +232,10 @@ function SecureShareApp({ user, onSignOut }) {
           setNotifications((n) => n.map((n) => n._id === id ? {...n, read: true} : n));
           setUnreadCount((c) => Math.max(0, c - 1));
         }}
-        showProfile={showProfile}
-        setShowProfile={setShowProfile}
       />
       <main className="wrap" style={{ maxWidth: tab === 'friends' ? '800px' : undefined }}>
-        {showProfile ? (
-          <ProfileView onClose={() => setShowProfile(false)} />
+        {tab === 'profile' ? (
+          <ProfileView onClose={() => setTab('transfer')} />
         ) : tab === 'transfer' ? (
           <>
             {view === 'pick' && (
@@ -280,7 +272,7 @@ function SecureShareApp({ user, onSignOut }) {
           />
         )}
       </main>
-      {tab === 'transfer' && !showProfile && (
+      {tab === 'transfer' && (
         <footer className="foot">Files never touch a server — this connection is direct, browser to browser.</footer>
       )}
     </div>

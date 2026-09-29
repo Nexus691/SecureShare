@@ -88,8 +88,8 @@ router.post('/', optionalAuth, async (req, res) => {
       fileName,
       fileSize,
       fileType,
-      senderId: senderId || (req.user && senderId === undefined ? req.user._id : null),
-      receiverId: receiverId || (req.user && receiverId === undefined ? req.user._id : null),
+      senderId: senderId || null,
+      receiverId: receiverId || null,
       status: status || 'completed'
     });
     

@@ -68,13 +68,18 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
   const channelRef = useRef(null);
   const cancelledRef = useRef(false);
 
+  const currentRoomCodeRef = useRef(null);
+
   const createRoom = useCallback((file, userId, password, cb) => {
     cancelledRef.current = false;
     socket.emit('create-room', {
       fileMeta: { name: file.name, size: file.size, type: file.type },
       userId,
       password
-    }, cb);
+    }, (res) => {
+      if (res.code) currentRoomCodeRef.current = res.code;
+      cb?.(res);
+    });
   }, []);
 
   const createFriendRoom = useCallback((file, userId, friendId, password, cb) => {
@@ -84,14 +89,20 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
       fileMeta: { name: file.name, size: file.size, type: file.type },
       userId,
       password
-    }, cb);
+    }, (res) => {
+      if (res.code) currentRoomCodeRef.current = res.code;
+      cb?.(res);
+    });
   }, []);
 
   const cancelTransfer = useCallback(() => {
     cancelledRef.current = true;
+    if (currentRoomCodeRef.current) {
+      socket.emit('cancel-transfer', { roomCode: currentRoomCodeRef.current, role: 'sender' });
+    }
     if (pcRef.current) pcRef.current.close();
-    onPeerLeft?.('receiver'); // Trigger disconnect UI
-  }, [onPeerLeft]);
+    onPeerLeftRef.current?.('receiver'); // Trigger disconnect UI
+  }, []);
 
   // We need to keep a ref to `onPeerJoined` and other callbacks
   // so the useEffect always calls the latest without needing to recreate the pc
@@ -283,7 +294,12 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
     callbacksRef.current = { onMeta, onProgress, onComplete, onPeerLeft };
   }, [onMeta, onProgress, onComplete, onPeerLeft]);
 
+  const currentRoomCodeRef = useRef(null);
+
   const cancelTransfer = useCallback(() => {
+    if (currentRoomCodeRef.current) {
+      socket.emit('cancel-transfer', { roomCode: currentRoomCodeRef.current, role: 'receiver' });
+    }
     if (pcRef.current) pcRef.current.close();
     callbacksRef.current.onPeerLeft?.('sender');
   }, []);
@@ -391,6 +407,7 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const joinRoom = useCallback((code, userId, password, cb) => {
+    currentRoomCodeRef.current = code;
     socket.emit('join-room', { code, userId, password }, cb);
   }, []);
 

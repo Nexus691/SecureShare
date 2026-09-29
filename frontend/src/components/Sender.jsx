@@ -40,6 +40,8 @@ export default function Sender({ onBack, selectedFriend = null }) {
           fileType: file.type,
           senderId: user?.id,
           status: 'completed'
+        }).then(() => {
+          window.dispatchEvent(new CustomEvent('refresh-history'));
         }).catch(err => console.error('Failed to log history:', err));
       }
     },

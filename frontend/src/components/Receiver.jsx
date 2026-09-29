@@ -45,6 +45,8 @@ export default function Receiver({ onBack, initialCode = '' }) {
           fileType: fileMeta.mime || 'application/octet-stream',
           receiverId: user?.id,
           status: 'completed'
+        }).then(() => {
+          window.dispatchEvent(new CustomEvent('refresh-history'));
         }).catch(err => console.error('Failed to log history:', err));
       }
     },

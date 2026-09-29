@@ -56,75 +56,59 @@ const ProfileView = ({ onClose }) => {
   };
 
   return (
-    <div className="profile-view">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ margin: 0 }}>Profile</h2>
-        <button
-          type="button"
-          onClick={onClose}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--on-surface-variant)',
-            fontSize: '16px',
-            cursor: 'pointer',
-            padding: '4px 8px',
-            borderRadius: '4px',
-            transition: 'background 0.15s'
-          }}
-          onMouseOver={(e) => e.currentTarget.style.background = 'var(--surface-container-low)'}
-          onMouseOut={(e) => e.currentTarget.style.background = 'none'}
-        >
-          ×
-        </button>
+    <section className="profile-view" aria-labelledby="profile-title">
+      <div className="profile-heading">
+        <div>
+          <span className="profile-kicker">Account settings</span>
+          <h1 id="profile-title">Your profile</h1>
+          <p>Manage how your name and photo appear to your friends.</p>
+        </div>
+        <button type="button" onClick={onClose} className="profile-close" aria-label="Close profile">×</button>
       </div>
-      {error && <div className="error">{error}</div>}
-      {success && <div className="success">{success}</div>}
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label htmlFor="displayName">Display Name</label>
-          <input
-            type="text"
-            id="displayName"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            required
-            maxLength={80}
-          />
-        </div>
-        <div className="form-group">
-          <label>Profile Photo</label>
-          <div className="photo-container">
+
+      <div className="profile-card">
+        <div className="profile-identity">
+          <button type="button" className="profile-photo-button" onClick={triggerFileInput} aria-label="Choose profile photo">
             {photoUrl ? (
-              <img
-                src={photoUrl}
-                alt="Profile"
-                className="profile-photo"
-              />
+              <img src={photoUrl} alt="Profile preview" className="profile-photo" />
             ) : (
-              <div className="photo-placeholder">No photo</div>
+              <span className="profile-initial">{(displayName || user?.email || 'U').charAt(0).toUpperCase()}</span>
             )}
-            <button
-              type="button"
-              onClick={triggerFileInput}
-              className="upload-button"
-            >
-              {photoUrl ? 'Change Photo' : 'Upload Photo'}
+            <span className="photo-edit-badge">✎</span>
+          </button>
+          <div>
+            <strong>{displayName || 'SecureShare user'}</strong>
+            <span>{user?.email}</span>
+            <button type="button" onClick={triggerFileInput} className="upload-button">
+              {photoUrl ? 'Change photo' : 'Upload photo'}
             </button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handlePhotoChange}
-              accept="image/*"
-              style={{ display: 'none' }}
-            />
           </div>
+          <input type="file" ref={fileInputRef} onChange={handlePhotoChange} accept="image/*" hidden />
         </div>
-        <button type="submit" disabled={isLoading} className="submit-button">
-          {isLoading ? 'Saving...' : 'Save Changes'}
-        </button>
-      </form>
-    </div>
+
+        {error && <div className="error" role="alert">{error}</div>}
+        {success && <div className="success" role="status">{success}</div>}
+
+        <form onSubmit={handleSubmit} className="profile-form">
+          <div className="form-group">
+            <label htmlFor="displayName">Display name</label>
+            <input type="text" id="displayName" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required maxLength={80} />
+            <small>This is the name other SecureShare users will see.</small>
+          </div>
+          <div className="form-group">
+            <label htmlFor="profileEmail">Email address</label>
+            <input type="email" id="profileEmail" value={user?.email || ''} readOnly />
+            <small>Your sign-in email cannot be changed here.</small>
+          </div>
+          <div className="profile-actions">
+            <button type="button" onClick={onClose} className="profile-cancel">Cancel</button>
+            <button type="submit" disabled={isLoading} className="submit-button">
+              {isLoading ? 'Saving…' : 'Save changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
   );
 };
 

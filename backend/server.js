@@ -212,6 +212,16 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("cancel-transfer", ({ roomCode, role }) => {
+    if (roomCode) {
+      socket.to(roomCode).emit("peer-left", { role });
+      // If sender cancels, invalidate the room entirely
+      if (role === "sender") {
+        rooms.delete(roomCode);
+      }
+    }
+  });
+
   socket.on("disconnect", () => {
     const code = socket.data.roomCode;
     const userId = socket.data.userId;
@@ -274,13 +284,20 @@ io.on("connection", (socket) => {
 
       // Also create persistent notification
       const { createNotification } = require("./routes/notifications");
-      createNotification({
+      const notification = await createNotification({
         userId: friendId,
         type: "file_transfer_request",
         title: "Incoming File Transfer",
         message: `${sender?.displayName || "A friend"} wants to send you "${fileMeta.name}" (${formatBytes(fileMeta.size)})`,
         data: { roomCode: code, fileMeta, fromUserId: userId },
       });
+
+      if (notification) {
+        emitToUser(friendId, "notification", {
+          type: "file_transfer_request",
+          notification,
+        });
+      }
 
       ack({ code });
     } catch (err) {
