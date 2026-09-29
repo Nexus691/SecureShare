@@ -48,9 +48,10 @@ export default function Sender({ onBack, selectedFriend = null }) {
     onPeerLeft: (role) => {
       if (role === 'declined') {
         setStatusMsg(`${selectedFriend?.displayName || 'Friend'} declined the file transfer.`);
-        setPhase('done');
+        setPhase('error');
       } else {
-        setStatusMsg('Receiver disconnected.');
+        setStatusMsg('Receiver canceled or disconnected.');
+        setPhase('error');
       }
     },
   });
@@ -142,6 +143,12 @@ export default function Sender({ onBack, selectedFriend = null }) {
               <div id="send-filesize" className="file-size">{formatBytes(file.size)}</div>
             </div>
           </div>
+
+          {phase === 'error' && (
+            <div style={{ color: 'var(--error)', marginTop: '16px', textAlign: 'center', padding: '12px', background: '#ffdad6', borderRadius: '8px' }}>
+              {statusMsg}
+            </div>
+          )}
 
           {/* Waiting block */}
           {phase === 'waiting' && (

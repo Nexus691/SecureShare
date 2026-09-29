@@ -11,7 +11,7 @@ import { useAuth } from './context/AuthContext';
 import { api } from './lib/api';
 import socket from './socket';
 
-function BrandHeader({ user, onSignOut, tab, onTabChange, unreadCount, notifications, showNotifications, onToggleNotifications, onMarkRead }) {
+function BrandHeader({ user, onSignOut, tab, onTabChange, unreadCount, notifications, showNotifications, onToggleNotifications, onMarkRead, onMarkAllRead }) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -55,6 +55,7 @@ function BrandHeader({ user, onSignOut, tab, onTabChange, unreadCount, notificat
               showNotifications={showNotifications}
               onToggle={onToggleNotifications}
               onMarkRead={onMarkRead}
+              onMarkAllRead={onMarkAllRead}
             />
             <div className="profile-trigger" onClick={() => onTabChange('profile')} title="Profile">
               {user.photoUrl ? (
@@ -115,13 +116,10 @@ function SecureShareApp({ user, onSignOut }) {
       setUnreadCount((c) => c + 1);
       setNotifications((n) => [data.notification, ...n]);
       
-      // Auto-refresh relevant views based on notification type
+      // Auto-refresh the view affected by the incoming notification.
       if (data.type === 'friend_request' || data.type === 'friend_accepted') {
         window.dispatchEvent(new CustomEvent('refresh-friends'));
       } else if (data.type === 'history_updated') {
-        window.dispatchEvent(new CustomEvent('refresh-history'));
-      }
-      if (data.type === 'history_updated') { // Assuming we add this soon
         window.dispatchEvent(new CustomEvent('refresh-history'));
       }
     };
@@ -229,8 +227,12 @@ function SecureShareApp({ user, onSignOut }) {
         showNotifications={showNotifications}
         onToggleNotifications={() => setShowNotifications(!showNotifications)}
         onMarkRead={(id) => {
-          setNotifications((n) => n.map((n) => n._id === id ? {...n, read: true} : n));
-          setUnreadCount((c) => Math.max(0, c - 1));
+          setNotifications((items) => items.map((item) => item._id === id ? { ...item, read: true } : item));
+          setUnreadCount((count) => Math.max(0, count - 1));
+        }}
+        onMarkAllRead={() => {
+          setNotifications((items) => items.map((item) => ({ ...item, read: true })));
+          setUnreadCount(0);
         }}
       />
       <main className="wrap" style={{ maxWidth: tab === 'friends' ? '800px' : undefined }}>

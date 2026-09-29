@@ -7,12 +7,13 @@ function formatDate(dateStr) {
     hour12: true
   });
 }
-export default function NotificationBell({ 
-  unreadCount, 
-  notifications, 
-  showNotifications, 
+export default function NotificationBell({
+  unreadCount,
+  notifications,
+  showNotifications,
   onToggle,
-  onMarkRead 
+  onMarkRead,
+  onMarkAllRead
 }) {
   const dropdownRef = useRef(null);
 
@@ -35,6 +36,15 @@ export default function NotificationBell({
       onMarkRead(id);
     } catch (err) {
       console.error('Failed to mark read', err);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await api.markAllNotificationsRead();
+      onMarkAllRead?.();
+    } catch (err) {
+      console.error('Failed to mark all read', err);
     }
   };
 
@@ -101,7 +111,17 @@ export default function NotificationBell({
             justifyContent: 'space-between',
             alignItems: 'center'
           }}>
-            <h3 style={{ margin: 0, fontSize: '16px' }}>Notifications</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+              <h3 style={{ margin: 0, fontSize: '16px' }}>Notifications</h3>
+              {notifications.length > 0 && (
+                <button
+                  onClick={handleMarkAllRead}
+                  style={{ background: 'none', border: 'none', color: 'var(--on-surface-variant)', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Mark all as read
+                </button>
+              )}
+            </div>
           </div>
           
           <div style={{ overflowY: 'auto', flex: 1 }}>
@@ -127,7 +147,12 @@ export default function NotificationBell({
                       gap: '4px'
                     }}
                     onClick={(e) => {
-                      if (!n.read) handleMarkRead(e, n._id);
+                      if (!n.read) {
+                        handleMarkRead(e, n._id);
+                        if (isTransferRequest || isFriendRequest) {
+                          e.stopPropagation();
+                        }
+                      }
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

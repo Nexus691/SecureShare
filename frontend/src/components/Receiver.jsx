@@ -50,7 +50,10 @@ export default function Receiver({ onBack, initialCode = '' }) {
         }).catch(err => console.error('Failed to log history:', err));
       }
     },
-    onPeerLeft: () => setStatusMsg('Sender disconnected.'),
+    onPeerLeft: () => {
+      setStatusMsg('Sender canceled or disconnected.');
+      setPhase('error');
+    },
   });
 
   const handleJoin = (codeToJoin = code) => {
