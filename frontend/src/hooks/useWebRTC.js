@@ -6,22 +6,57 @@
 import { useEffect, useRef, useCallback } from 'react';
 import socket from '../socket';
 
-// We add Google STUN and a free public TURN server (OpenRelay) to guarantee connection 
-// even across strict corporate firewalls, symmetric NATs, or tricky cellular networks.
+// STUN + TURN + TURNS servers for WebRTC connectivity.
+// TURNS (TURN over TLS) is critical for VPN users — it tunnels through port 443
+// as regular HTTPS traffic, bypassing VPN/firewall UDP blocks.
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  // OpenRelay TURN (UDP + TCP)
   {
     urls: 'turn:openrelay.metered.ca:80',
     username: 'openrelayproject',
     credential: 'openrelayproject'
   },
+  // OpenRelay TURN over TCP (bypasses UDP blocks)
   {
-    urls: 'turn:openrelay.metered.ca:443',
+    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  // OpenRelay TURNS (TURN over TLS on 443 — looks like HTTPS, works through VPNs)
+  {
+    urls: 'turns:openrelay.metered.ca:443',
     username: 'openrelayproject',
     credential: 'openrelayproject'
   }
 ];
+
+function describeCandidate(candidate) {
+  if (!candidate) return 'end-of-candidates';
+  const value = candidate.candidate || '';
+  const type = candidate.type || value.match(/ typ (\w+)/)?.[1] || 'unknown';
+  const protocol = candidate.protocol || value.split(' ')[2] || 'unknown';
+  return `${type}/${protocol} ${candidate.address || ''}:${candidate.port || ''}`;
+}
+
+function attachIceDiagnostics(pc, role) {
+  pc.onicegatheringstatechange = () => {
+    console.log(`[${role}] ICE gathering state:`, pc.iceGatheringState);
+  };
+  pc.oniceconnectionstatechange = () => {
+    console.log(`[${role}] ICE connection state:`, pc.iceConnectionState);
+  };
+  pc.onicecandidateerror = (event) => {
+    console.error(`[${role}] ICE server error:`, {
+      url: event.url,
+      errorCode: event.errorCode,
+      errorText: event.errorText,
+      address: event.address,
+      port: event.port,
+    });
+  };
+}
 
 const CHUNK_SIZE = 16 * 1024; // 16 KB is safest cross-browser
 // Increased threshold back to 2MB. Lowering it too much causes the browser to choke 
@@ -70,19 +105,27 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
 
   useEffect(() => {
     const handlePeerJoined = async ({ peerId, receiverUserId }) => {
+      console.log("[Sender] handlePeerJoined called with peerId:", peerId);
       onPeerJoinedRef.current?.({ receiverUserId });
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      const pc = new RTCPeerConnection({
+        iceServers: ICE_SERVERS,
+        iceTransportPolicy: 'all' // allow both STUN (direct) and TURN (relay)
+      });
       pcRef.current = pc;
+      attachIceDiagnostics(pc, 'Sender');
 
       pc.onconnectionstatechange = () => {
+        console.log("[Sender] PC connection state changed:", pc.connectionState);
         // WebRTC can temporarily go into 'disconnected' state while gathering ICE or switching networks.
         // We only want to kill the transfer if it definitively fails or is closed.
         if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+          console.error("[Sender] PC failed or closed. Triggering onPeerLeft.");
           onPeerLeftRef.current?.('receiver');
         }
       };
 
       pc.onicecandidate = (e) => {
+        console.log('[Sender] Local ICE candidate:', describeCandidate(e.candidate));
         if (e.candidate) {
           socket.emit('signal', { targetId: peerId, data: { type: 'ice', candidate: e.candidate } });
         }
@@ -100,20 +143,36 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
         onPeerLeftRef.current?.('receiver');
       };
 
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit('signal', { targetId: peerId, data: { type: 'offer', sdp: offer } });
-
       const handleSignal = async ({ from, data }) => {
+        console.log("[Sender] Received signal from:", from, "Type:", data.type);
         if (from !== peerId) return;
         if (data.type === 'answer') {
-          await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            console.log("[Sender] Successfully set remote description (answer)");
+          } catch (err) {
+            console.error("[Sender] Failed to set remote description:", err);
+          }
         } else if (data.type === 'ice') {
-          try { await pc.addIceCandidate(data.candidate); } catch (_) {}
+          try {
+            await pc.addIceCandidate(data.candidate);
+            console.log('[Sender] Added remote ICE candidate:', describeCandidate(data.candidate));
+          } catch (err) {
+            console.error("[Sender] Failed to add ICE candidate:", err);
+          }
         }
       };
       socket.on('signal', handleSignal);
       pc.__signalHandler = handleSignal;
+
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        console.log("[Sender] Created offer and set local description. Emitting signal...");
+        socket.emit('signal', { targetId: peerId, data: { type: 'offer', sdp: offer } });
+      } catch (err) {
+        console.error("[Sender] Failed to create/send offer:", err);
+      }
     };
 
     const handlePeerLeft = ({ role }) => onPeerLeftRef.current?.(role);
@@ -230,19 +289,29 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
   }, []);
 
   useEffect(() => {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    console.log("[Receiver] Creating RTCPeerConnection...");
+    const pc = new RTCPeerConnection({
+      iceServers: ICE_SERVERS,
+      iceTransportPolicy: 'all'
+    });
     pcRef.current = pc;
+    attachIceDiagnostics(pc, 'Receiver');
     chunksRef.current = [];
     receivedBytesRef.current = 0;
     lastPctRef.current = 0;
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+      console.log("[Receiver] PC connection state changed:", pc.connectionState);
+      // A VPN or network switch can cause a temporary disconnected state.
+      // Only failed and closed are terminal WebRTC states.
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        console.error("[Receiver] PC failed or closed. Triggering onPeerLeft.");
         callbacksRef.current.onPeerLeft?.('sender');
       }
     };
 
     pc.onicecandidate = (e) => {
+      console.log('[Receiver] Local ICE candidate:', describeCandidate(e.candidate));
       if (e.candidate && senderPeerIdRef.current) {
         socket.emit('signal', {
           targetId: senderPeerIdRef.current,
@@ -286,14 +355,26 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
     };
 
     const handleSignal = async ({ from, data }) => {
+      console.log("[Receiver] Received signal from:", from, "Type:", data.type);
       if (data.type === 'offer') {
-        senderPeerIdRef.current = from;
-        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.emit('signal', { targetId: from, data: { type: 'answer', sdp: answer } });
+        try {
+          senderPeerIdRef.current = from;
+          await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+          console.log("[Receiver] Set remote description (offer)");
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          console.log("[Receiver] Created answer and set local description. Emitting signal...");
+          socket.emit('signal', { targetId: from, data: { type: 'answer', sdp: answer } });
+        } catch (err) {
+          console.error("[Receiver] Failed to handle offer:", err);
+        }
       } else if (data.type === 'ice') {
-        try { await pc.addIceCandidate(data.candidate); } catch (_) {}
+        try {
+          await pc.addIceCandidate(data.candidate);
+          console.log('[Receiver] Added remote ICE candidate:', describeCandidate(data.candidate));
+        } catch (err) {
+          console.error("[Receiver] Failed to add ICE candidate:", err);
+        }
       }
     };
 
