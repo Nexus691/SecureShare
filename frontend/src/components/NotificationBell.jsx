@@ -50,12 +50,12 @@ export default function NotificationBell({
 
   return (
     <div style={{ position: 'relative' }} ref={dropdownRef}>
-      <button 
+      <button
         onClick={onToggle}
-        style={{ 
-          background: 'none', 
-          border: 'none', 
-          fontSize: '20px', 
+        style={{
+          background: 'none',
+          border: 'none',
+          fontSize: '20px',
           cursor: 'pointer',
           position: 'relative',
           display: 'flex',
@@ -104,8 +104,8 @@ export default function NotificationBell({
           overflow: 'hidden',
           border: '1px solid var(--outline-variant)'
         }}>
-          <div style={{ 
-            padding: '16px', 
+          <div style={{
+            padding: '16px',
             borderBottom: '1px solid var(--outline-variant)',
             display: 'flex',
             justifyContent: 'space-between',
@@ -123,7 +123,7 @@ export default function NotificationBell({
               )}
             </div>
           </div>
-          
+
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {notifications.length === 0 ? (
               <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--on-surface-variant)' }}>
@@ -133,7 +133,7 @@ export default function NotificationBell({
               notifications.map((n) => {
                 const isTransferRequest = n.type === 'file_transfer_request';
                 const isFriendRequest = n.type === 'friend_request';
-                
+
                 return (
                   <div
                     key={n._id}
@@ -166,7 +166,7 @@ export default function NotificationBell({
                     <div style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>
                       {n.message}
                     </div>
-                    
+
                     {isTransferRequest && !n.read && n.data?.roomCode && (
                       <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                         <button
@@ -175,7 +175,7 @@ export default function NotificationBell({
                           onClick={(e) => {
                             e.stopPropagation();
                             handleMarkRead(e, n._id);
-                            // We dispatch a custom event to tell App.jsx to jump to this room
+
                             window.dispatchEvent(new CustomEvent('accept-transfer', { detail: n.data }));
                           }}
                         >
@@ -195,7 +195,7 @@ export default function NotificationBell({
                           onClick={(e) => {
                             e.stopPropagation();
                             handleMarkRead(e, n._id);
-                            // We dispatch an event so App.jsx can decline via socket
+
                             window.dispatchEvent(new CustomEvent('decline-transfer', { detail: n.data }));
                           }}
                         >
@@ -238,7 +238,7 @@ export default function NotificationBell({
                         </button>
                       </div>
                     )}
-                    
+
                     <div style={{ fontSize: '11px', color: 'var(--on-surface-variant)', marginTop: '4px' }}>
                       {formatDate(n.createdAt)}
                     </div>

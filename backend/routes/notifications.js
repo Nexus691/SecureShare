@@ -26,8 +26,6 @@ const authMiddleware = async (req, res, next) => {
 
 router.use(authMiddleware);
 
-// GET /api/notifications
-// Returns notifications for the logged-in user
 router.get('/', async (req, res) => {
   try {
     const { unreadOnly, limit = 50 } = req.query;
@@ -45,8 +43,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/notifications/unread-count
-// Returns count of unread notifications
 router.get('/unread-count', async (req, res) => {
   try {
     const count = await Notification.countDocuments({ userId: req.user._id, read: false });
@@ -57,8 +53,6 @@ router.get('/unread-count', async (req, res) => {
   }
 });
 
-// POST /api/notifications/:id/read
-// Mark a notification as read
 router.post('/:id/read', async (req, res) => {
   try {
     const notification = await Notification.findOneAndUpdate(
@@ -76,8 +70,6 @@ router.post('/:id/read', async (req, res) => {
   }
 });
 
-// POST /api/notifications/read-all
-// Mark all notifications as read
 router.post('/read-all', async (req, res) => {
   try {
     await Notification.updateMany(
@@ -91,8 +83,6 @@ router.post('/read-all', async (req, res) => {
   }
 });
 
-// DELETE /api/notifications/:id
-// Delete a notification
 router.delete('/:id', async (req, res) => {
   try {
     const notification = await Notification.findOneAndDelete({
@@ -109,7 +99,6 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// Helper function to create a notification (used by other routes)
 async function createNotification({ userId, type, title, message, data = {} }) {
   try {
     const notification = new Notification({ userId, type, title, message, data });

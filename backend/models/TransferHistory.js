@@ -4,12 +4,12 @@ const transferHistorySchema = new mongoose.Schema({
   senderId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    default: null, // null if anonymous sender
+    default: null,
   },
   receiverId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    default: null, // null if anonymous receiver
+    default: null,
   },
   fileName: {
     type: String,
@@ -36,7 +36,6 @@ const transferHistorySchema = new mongoose.Schema({
   timestamps: true,
 });
 
-// Indexes for querying history by user
 transferHistorySchema.index({ senderId: 1, createdAt: -1 });
 transferHistorySchema.index({ receiverId: 1, createdAt: -1 });
 

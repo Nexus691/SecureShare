@@ -13,7 +13,7 @@ export default function Sender({ onBack, selectedFriend = null }) {
   const { user } = useAuth();
   const [file, setFileState] = useState(null);
   const [roomCode, setRoomCode] = useState('------');
-  const [phase, setPhase] = useState('idle'); // idle | waiting | transferring | done
+  const [phase, setPhase] = useState('idle');
   const [progress, setProgress] = useState(0);
   const [statusMsg, setStatusMsg] = useState('Waiting for someone to enter this code…');
   const [dragover, setDragover] = useState(false);
@@ -30,8 +30,7 @@ export default function Sender({ onBack, selectedFriend = null }) {
     onComplete: () => {
       setProgress(100);
       setPhase('done');
-      
-      // Log history
+
       if (file) {
         api.logHistory({
           roomCode,
@@ -106,8 +105,8 @@ export default function Sender({ onBack, selectedFriend = null }) {
           <div className="dz-icon">☁↑</div>
           <div className="dz-title">{selectedFriend ? `Send a file to ${selectedFriend.displayName}` : 'Drag and drop a file here'}</div>
           <div className="dz-sub">{selectedFriend ? 'Drop or choose one file — they get a one-click accept notification' : 'or click to browse'}</div>
-          
-          {/* Password input before file selection - hidden for friend transfers */}
+
+          {}
           {!selectedFriend && (
             <div
               onClick={(e) => e.stopPropagation()}
@@ -125,7 +124,7 @@ export default function Sender({ onBack, selectedFriend = null }) {
               />
             </div>
           )}
-          
+
           <input
             ref={fileInputRef}
             type="file"
@@ -150,7 +149,7 @@ export default function Sender({ onBack, selectedFriend = null }) {
             </div>
           )}
 
-          {/* Waiting block */}
+          {}
           {phase === 'waiting' && (
             <div id="waiting-block">
               {selectedFriend ? (
@@ -181,7 +180,7 @@ export default function Sender({ onBack, selectedFriend = null }) {
                   )}
                 </>
               )}
-              
+
               {password && (
                 <div style={{ marginBottom: '16px', padding: '12px', background: '#f0f4ff', borderRadius: '8px', border: '1px solid var(--outline-variant)' }}>
                   <div style={{ fontSize: '13px', color: 'var(--primary)', fontWeight: 500 }}>
@@ -208,7 +207,7 @@ export default function Sender({ onBack, selectedFriend = null }) {
             </div>
           )}
 
-          {/* Transfer block */}
+          {}
           {(phase === 'transferring' || phase === 'done') && (
             <div id="transfer-block">
               <div className="status-line" id="send-transfer-line" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

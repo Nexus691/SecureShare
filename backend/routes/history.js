@@ -6,7 +6,6 @@ const jwt = require('jsonwebtoken');
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 
-// Optional auth middleware - doesn't block if not logged in, but sets req.user if they are
 const optionalAuth = async (req, res, next) => {
   const token = req.cookies.token;
   if (!token) {
@@ -20,11 +19,10 @@ const optionalAuth = async (req, res, next) => {
     }
     next();
   } catch (err) {
-    next(); // Ignore invalid tokens for optional auth
+    next();
   }
 };
 
-// Strict auth middleware for fetching history
 const requireAuth = async (req, res, next) => {
   const token = req.cookies.token;
   if (!token) {
@@ -43,8 +41,6 @@ const requireAuth = async (req, res, next) => {
   }
 };
 
-// GET /api/history
-// Returns transfer history for the logged-in user
 router.get('/', requireAuth, async (req, res) => {
   try {
     const history = await TransferHistory.find({
@@ -53,7 +49,7 @@ router.get('/', requireAuth, async (req, res) => {
       .populate('senderId', 'displayName email')
       .populate('receiverId', 'displayName email')
       .sort({ createdAt: -1 })
-      .limit(50); // Limit to last 50 for now
+      .limit(50);
 
     res.json({ history });
   } catch (err) {
@@ -62,27 +58,23 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/history
-// Logs a transfer. Can be called by sender or receiver.
 router.post('/', optionalAuth, async (req, res) => {
   try {
     const { roomCode, fileName, fileSize, fileType, senderId, receiverId, status } = req.body;
-    
-    // We only create one record per room code. We should check if one already exists to avoid duplicates
-    // since both sender and receiver might call this endpoint.
+
     let history = await TransferHistory.findOne({ roomCode });
-    
+
     if (history) {
-      // Update existing record with any new info (like receiverId if sender logged it first)
+
       let updated = false;
       if (senderId && !history.senderId) { history.senderId = senderId; updated = true; }
       if (receiverId && !history.receiverId) { history.receiverId = receiverId; updated = true; }
       if (status === 'completed' && history.status !== 'completed') { history.status = status; updated = true; }
-      
+
       if (updated) await history.save();
       return res.json({ history });
     }
-    
+
     history = new TransferHistory({
       roomCode,
       fileName,
@@ -92,7 +84,7 @@ router.post('/', optionalAuth, async (req, res) => {
       receiverId: receiverId || null,
       status: status || 'completed'
     });
-    
+
     await history.save();
     res.json({ history });
   } catch (err) {

@@ -33,7 +33,7 @@ export default function HistoryView({ user }) {
       const res = await api.getHistory();
       setHistory(res.history);
       setError('');
-    } catch (err) {
+    } catch {
       setError('Failed to load history');
     } finally {
       setLoading(false);
@@ -43,9 +43,9 @@ export default function HistoryView({ user }) {
   return (
     <section id="history-view" style={{ maxWidth: '600px', margin: '0 auto' }}>
       <h2 style={{ marginBottom: '24px' }}>Transfer History</h2>
-      
+
       {error && <div className="error-banner">{error}</div>}
-      
+
       {loading ? (
         <div style={{ textAlign: 'center', padding: '24px', color: 'var(--on-surface-variant)' }}>Loading...</div>
       ) : history.length === 0 ? (
@@ -61,13 +61,13 @@ export default function HistoryView({ user }) {
             const otherUser = isSender ? record.receiverId : record.senderId;
             const direction = isSender ? 'Sent to' : 'Received from';
             const icon = isSender ? '↗️' : '↙️';
-            
+
             return (
               <div key={record._id} className="card" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '16px', transition: 'transform 0.2s ease' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
                 <div style={{ fontSize: '24px', background: 'var(--surface-container-low)', border: '1px solid var(--outline-variant)', width: '48px', height: '48px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {icon}
                 </div>
-                
+
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                   <div style={{ fontWeight: 600, fontSize: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--on-surface)' }}>
                     {record.fileName}
@@ -78,7 +78,7 @@ export default function HistoryView({ user }) {
                     <span>{formatDate(record.createdAt)}</span>
                   </div>
                 </div>
-                
+
                 <div style={{ textAlign: 'right', minWidth: '120px' }}>
                   <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginBottom: '4px' }}>
                     {direction}

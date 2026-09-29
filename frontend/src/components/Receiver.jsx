@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useReceiver } from '../hooks/useWebRTC';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
@@ -14,13 +14,12 @@ export default function Receiver({ onBack, initialCode = '' }) {
   const { user } = useAuth();
   const [code, setCode] = useState(initialCode);
   const [password, setPassword] = useState('');
-  const [phase, setPhase] = useState('idle'); // idle | joined | receiving | done | error
+  const [phase, setPhase] = useState('idle');
   const [statusMsg, setStatusMsg] = useState('');
   const [fileMeta, setFileMeta] = useState(null);
   const [progress, setProgress] = useState(0);
   const [downloadInfo, setDownloadInfo] = useState(null);
   const [joining, setJoining] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [lastError, setLastError] = useState('');
 
   const { joinRoom, cancelTransfer } = useReceiver({
@@ -35,8 +34,7 @@ export default function Receiver({ onBack, initialCode = '' }) {
       setProgress(100);
       setPhase('done');
       setStatusMsg('Transfer complete ✓');
-      
-      // Log history
+
       if (fileMeta) {
         api.logHistory({
           roomCode: code,
@@ -56,7 +54,7 @@ export default function Receiver({ onBack, initialCode = '' }) {
     },
   });
 
-  const handleJoin = (codeToJoin = code) => {
+  const handleJoin = useCallback((codeToJoin = code) => {
     const trimmed = codeToJoin.trim().toUpperCase();
     if (trimmed.length !== 6) {
       setStatusMsg('Enter the 6-character code.');
@@ -65,7 +63,7 @@ export default function Receiver({ onBack, initialCode = '' }) {
     setJoining(true);
     setStatusMsg('Connecting…');
 
-    joinRoom(trimmed, user?.id, password || undefined, (res) => {
+    joinRoom(trimmed, user?.id, password, (res) => {
       if (res.error) {
         setStatusMsg(res.error);
         setLastError(res.error);
@@ -79,15 +77,14 @@ export default function Receiver({ onBack, initialCode = '' }) {
       setJoining(false);
       setStatusMsg('Waiting for sender to connect…');
     });
-  };
+  }, [code, joinRoom, user, password]);
 
-  // Auto-join if opened via share link
   useEffect(() => {
     if (initialCode && initialCode.length === 6) {
       handleJoin(initialCode);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialCode]);
+
+  }, [initialCode, handleJoin]);
 
   return (
     <section id="receive-view">

@@ -16,7 +16,7 @@ const setTokenCookie = (res, token) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 };
 
@@ -46,7 +46,6 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
-// POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
     const { email, password, displayName } = req.body;
@@ -73,7 +72,6 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -99,20 +97,17 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// POST /api/auth/logout
 router.post('/logout', (req, res) => {
   clearTokenCookie(res);
   res.json({ ok: true });
 });
 
-// GET /api/auth/me
 router.get('/me', authMiddleware, (req, res) => {
   res.json({
     user: { id: req.user._id, email: req.user.email, displayName: req.user.displayName, photoUrl: req.user.photoUrl },
   });
 });
 
-// PUT /api/auth/profile
 router.put('/profile', authMiddleware, async (req, res) => {
   try {
     const { displayName, photoUrl } = req.body;

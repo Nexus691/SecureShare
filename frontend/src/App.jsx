@@ -94,7 +94,7 @@ function AuthGate() {
 
 function SecureShareApp({ user, onSignOut }) {
   const [tab, setTab] = useState('transfer');
-  const [view, setView] = useState('pick'); // pick | send | receive
+  const [view, setView] = useState('pick');
   const [initialRoomCode, setInitialRoomCode] = useState('');
   const [selectedFriend, setSelectedFriend] = useState(null);
   const [isConnected, setIsConnected] = useState(socket.connected);
@@ -105,18 +105,16 @@ function SecureShareApp({ user, onSignOut }) {
   useEffect(() => {
     const onConnect = () => setIsConnected(true);
     const onDisconnect = () => setIsConnected(false);
-    
-    // Listen for file-transfer-request via socket for immediate UI response
+
     const onTransferRequest = (data) => {
-      // This allows immediate response even if the DB notification is slightly delayed
+
       console.log('Incoming transfer request:', data);
     };
 
     const onNotification = (data) => {
       setUnreadCount((c) => c + 1);
       setNotifications((n) => [data.notification, ...n]);
-      
-      // Auto-refresh the view affected by the incoming notification.
+
       if (data.type === 'friend_request' || data.type === 'friend_accepted') {
         window.dispatchEvent(new CustomEvent('refresh-friends'));
       } else if (data.type === 'history_updated') {
@@ -129,9 +127,8 @@ function SecureShareApp({ user, onSignOut }) {
     socket.on('notification', onNotification);
     socket.on('file-transfer-request', onTransferRequest);
 
-    // Listen for custom events from NotificationBell
     const onAcceptTransfer = (e) => {
-      const { roomCode, password } = e.detail;
+      const { roomCode } = e.detail;
       socket.emit('file-transfer-response', { roomCode, accept: true, userId: user?.id }, (res) => {
         if (res.error) {
           alert(res.error);
@@ -143,7 +140,7 @@ function SecureShareApp({ user, onSignOut }) {
         }
       });
     };
-    
+
     const onDeclineTransfer = (e) => {
       const { roomCode } = e.detail;
       socket.emit('file-transfer-response', { roomCode, accept: false, userId: user?.id }, () => {

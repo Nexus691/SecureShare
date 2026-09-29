@@ -28,7 +28,7 @@ export default function FriendsView({ onSendFile }) {
 
   useEffect(() => {
     loadData();
-    
+
     const onRefresh = () => loadData();
     window.addEventListener('refresh-friends', onRefresh);
     return () => window.removeEventListener('refresh-friends', onRefresh);
@@ -91,7 +91,7 @@ export default function FriendsView({ onSendFile }) {
 
   return (
     <div style={{ maxWidth: '600px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      {/* Add Friend Form */}
+      {}
       <section className="card" style={{ padding: '24px' }}>
         <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600 }}>Add Friend</h3>
         <form onSubmit={sendRequest} style={{ display: 'flex', gap: '8px' }}>
@@ -128,7 +128,7 @@ export default function FriendsView({ onSendFile }) {
         )}
       </section>
 
-      {/* Incoming Requests */}
+      {}
       {requests.incoming.length > 0 && (
         <section>
           <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -189,7 +189,7 @@ export default function FriendsView({ onSendFile }) {
         </section>
       )}
 
-      {/* Outgoing Requests */}
+      {}
       {requests.outgoing.length > 0 && (
         <section>
           <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: 'var(--on-surface-variant)' }}>
@@ -220,7 +220,7 @@ export default function FriendsView({ onSendFile }) {
         </section>
       )}
 
-      {/* Friends List */}
+      {}
       <section>
         <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600 }}>My Friends</h3>
         {friends.length === 0 ? (

@@ -1,30 +1,22 @@
-/**
- * useWebRTC — custom hook that encapsulates all WebRTC + Socket.io logic.
- * Keeps the Sender and Receiver components clean.
- */
-
 import { useEffect, useRef, useCallback } from 'react';
 import socket from '../socket';
 
-// STUN + TURN + TURNS servers for WebRTC connectivity.
-// TURNS (TURN over TLS) is critical for VPN users — it tunnels through port 443
-// as regular HTTPS traffic, bypassing VPN/firewall UDP blocks.
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
-  // OpenRelay TURN (UDP + TCP)
+
   {
     urls: 'turn:openrelay.metered.ca:80',
     username: 'openrelayproject',
     credential: 'openrelayproject'
   },
-  // OpenRelay TURN over TCP (bypasses UDP blocks)
+
   {
     urls: 'turn:openrelay.metered.ca:443?transport=tcp',
     username: 'openrelayproject',
     credential: 'openrelayproject'
   },
-  // OpenRelay TURNS (TURN over TLS on 443 — looks like HTTPS, works through VPNs)
+
   {
     urls: 'turns:openrelay.metered.ca:443',
     username: 'openrelayproject',
@@ -58,10 +50,9 @@ function attachIceDiagnostics(pc, role) {
   };
 }
 
-const CHUNK_SIZE = 16 * 1024; // 16 KB is safest cross-browser
-// Increased threshold back to 2MB. Lowering it too much causes the browser to choke 
-// on event loop wake-ups for large files, freezing the transfer.
-const BUFFERED_AMOUNT_LOW_THRESHOLD = 2 * 1024 * 1024; // 2 MB
+const CHUNK_SIZE = 16 * 1024;
+
+const BUFFERED_AMOUNT_LOW_THRESHOLD = 2 * 1024 * 1024;
 
 export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) {
   const pcRef = useRef(null);
@@ -101,14 +92,12 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
       socket.emit('cancel-transfer', { roomCode: currentRoomCodeRef.current, role: 'sender' });
     }
     if (pcRef.current) pcRef.current.close();
-    onPeerLeftRef.current?.('receiver'); // Trigger disconnect UI
+    onPeerLeftRef.current?.('receiver');
   }, []);
 
-  // We need to keep a ref to `onPeerJoined` and other callbacks
-  // so the useEffect always calls the latest without needing to recreate the pc
   const onPeerJoinedRef = useRef(onPeerJoined);
   const onPeerLeftRef = useRef(onPeerLeft);
-  
+
   useEffect(() => {
     onPeerJoinedRef.current = onPeerJoined;
     onPeerLeftRef.current = onPeerLeft;
@@ -120,15 +109,14 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
       onPeerJoinedRef.current?.({ receiverUserId });
       const pc = new RTCPeerConnection({
         iceServers: ICE_SERVERS,
-        iceTransportPolicy: 'all' // allow both STUN (direct) and TURN (relay)
+        iceTransportPolicy: 'all'
       });
       pcRef.current = pc;
       attachIceDiagnostics(pc, 'Sender');
 
       pc.onconnectionstatechange = () => {
         console.log("[Sender] PC connection state changed:", pc.connectionState);
-        // WebRTC can temporarily go into 'disconnected' state while gathering ICE or switching networks.
-        // We only want to kill the transfer if it definitively fails or is closed.
+
         if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
           console.error("[Sender] PC failed or closed. Triggering onPeerLeft.");
           onPeerLeftRef.current?.('receiver');
@@ -149,7 +137,7 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
       channel.onopen = () => {
         sendFile(channel);
       };
-      
+
       channel.onclose = () => {
         onPeerLeftRef.current?.('receiver');
       };
@@ -202,12 +190,11 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
       }
       pcRef.current?.close();
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const fileRef = useRef(null);
   const setFile = (f) => { fileRef.current = f; };
 
-  // Keep refs to callbacks so sendFile always uses the latest
   const onProgressRef = useRef(onProgress);
   const onCompleteRef = useRef(onComplete);
   useEffect(() => {
@@ -248,13 +235,13 @@ export function useSender({ onProgress, onComplete, onPeerJoined, onPeerLeft }) 
           offset += chunk.byteLength;
 
           const pct = Math.min(100, Math.round((offset / buffer.byteLength) * 100));
-          // CRITICAL: Only update React state if percentage changed to avoid 14,000+ renders!
+
           if (pct !== lastPct) {
             lastPct = pct;
             onProgressRef.current?.(pct);
           }
         }
-        
+
         const finishTransfer = () => {
           if (cancelledRef.current || channel.readyState !== 'open') return;
           channel.send(JSON.stringify({ type: 'done' }));
@@ -287,7 +274,7 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
   const receivedBytesRef = useRef(0);
   const expectedMetaRef = useRef(null);
   const senderPeerIdRef = useRef(null);
-  const lastPctRef = useRef(0); // Track progress so we don't spam React renders
+  const lastPctRef = useRef(0);
   const callbacksRef = useRef({ onMeta, onProgress, onComplete, onPeerLeft });
 
   useEffect(() => {
@@ -318,8 +305,7 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
 
     pc.onconnectionstatechange = () => {
       console.log("[Receiver] PC connection state changed:", pc.connectionState);
-      // A VPN or network switch can cause a temporary disconnected state.
-      // Only failed and closed are terminal WebRTC states.
+
       if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
         console.error("[Receiver] PC failed or closed. Triggering onPeerLeft.");
         callbacksRef.current.onPeerLeft?.('sender');
@@ -342,7 +328,7 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
       channel.onclose = () => {
         callbacksRef.current.onPeerLeft?.('sender');
       };
-      
+
       channel.onmessage = (ev) => {
         if (typeof ev.data === 'string') {
           const msg = JSON.parse(ev.data);
@@ -360,8 +346,7 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
           receivedBytesRef.current += ev.data.byteLength;
           const total = expectedMetaRef.current?.size || 1;
           const pct = Math.min(100, Math.round((receivedBytesRef.current / total) * 100));
-          
-          // CRITICAL: Only update React state if percentage changed
+
           if (pct !== lastPctRef.current) {
             lastPctRef.current = pct;
             callbacksRef.current.onProgress?.(pct);
@@ -404,7 +389,7 @@ export function useReceiver({ onMeta, onProgress, onComplete, onPeerLeft }) {
       socket.off('peer-left', handlePeerLeft);
       pc.close();
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const joinRoom = useCallback((code, userId, password, cb) => {
     currentRoomCodeRef.current = code;

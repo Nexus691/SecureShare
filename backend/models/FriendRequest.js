@@ -20,10 +20,8 @@ const friendRequestSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-// Ensure a user can't send multiple pending requests to the same user
 friendRequestSchema.index({ from: 1, to: 1, status: 1 }, { unique: true, partialFilterExpression: { status: 'pending' } });
 
-// Prevent self-friend requests
 friendRequestSchema.pre('validate', function() {
   if (this.from.equals(this.to)) {
     throw new Error('Cannot send friend request to yourself');

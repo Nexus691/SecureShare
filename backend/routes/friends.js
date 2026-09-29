@@ -9,7 +9,6 @@ const { createNotification } = require('./notifications');
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 
-// Basic auth middleware mapped directly in this router for ease of access
 const authMiddleware = async (req, res, next) => {
   const token = req.cookies.token;
   if (!token) {
@@ -30,15 +29,12 @@ const authMiddleware = async (req, res, next) => {
 
 router.use(authMiddleware);
 
-// ─── Helper: normalize a friendship pair so user1 < user2 lexically ──────────
 function normalizePair(a, b) {
   const aStr = a.toString();
   const bStr = b.toString();
   return aStr < bStr ? [a, b] : [b, a];
 }
 
-// ─── GET /api/friends ─────────────────────────────────────────────────────────
-// Returns the authenticated user's accepted friend list with basic profile info
 router.get('/', async (req, res) => {
   try {
     const userId = req.user._id;
@@ -61,8 +57,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ─── GET /api/friends/requests ───────────────────────────────────────────────
-// Returns incoming pending requests
 router.get('/requests', async (req, res) => {
   try {
     const incoming = await FriendRequest.find({
@@ -93,8 +87,6 @@ router.get('/requests', async (req, res) => {
   }
 });
 
-// ─── POST /api/friends/request ───────────────────────────────────────────────
-// Send a friend request by email
 router.post('/request', async (req, res) => {
   try {
     const { email } = req.body;
@@ -112,23 +104,21 @@ router.post('/request', async (req, res) => {
       return res.status(400).json({ error: 'Cannot send friend request to yourself' });
     }
 
-    // Check if already friends
     const [u1, u2] = normalizePair(currentUserId, targetUser._id);
     const existingFriendship = await Friendship.findOne({ user1: u1, user2: u2 });
     if (existingFriendship) {
       return res.status(409).json({ error: 'Already friends' });
     }
 
-    // Check for existing pending request (either direction)
     const existingRequest = await FriendRequest.findOne({
       $or: [
         { from: currentUserId, to: targetUser._id, status: 'pending' },
         { from: targetUser._id, to: currentUserId, status: 'pending' },
       ],
     });
-    
+
     if (existingRequest) {
-      // If the other person already sent a request, auto-accept it
+
       if (existingRequest.from.equals(targetUser._id)) {
         existingRequest.status = 'accepted';
         await existingRequest.save();
@@ -147,7 +137,6 @@ router.post('/request', async (req, res) => {
 
     const request = await FriendRequest.create({ from: currentUserId, to: targetUser._id });
 
-    // Notify the recipient
     const notification = await createNotification({
       userId: targetUser._id,
       type: 'friend_request',
@@ -174,7 +163,6 @@ router.post('/request', async (req, res) => {
   }
 });
 
-// ─── POST /api/friends/accept/:requestId ─────────────────────────────────────
 router.post('/accept/:requestId', async (req, res) => {
   try {
     const request = await FriendRequest.findById(req.params.requestId);
@@ -198,7 +186,6 @@ router.post('/accept/:requestId', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // Notify the original sender that their request was accepted
     const notification = await createNotification({
       userId: request.from,
       type: 'friend_accepted',
@@ -217,7 +204,6 @@ router.post('/accept/:requestId', async (req, res) => {
   }
 });
 
-// ─── POST /api/friends/decline/:requestId ────────────────────────────────────
 router.post('/decline/:requestId', async (req, res) => {
   try {
     const request = await FriendRequest.findById(req.params.requestId);
@@ -240,8 +226,6 @@ router.post('/decline/:requestId', async (req, res) => {
   }
 });
 
-// ─── DELETE /api/friends/:friendUserId ───────────────────────────────────────
-// Remove an existing friend
 router.delete('/:friendUserId', async (req, res) => {
   try {
     const { friendUserId } = req.params;

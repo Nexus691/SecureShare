@@ -18,7 +18,7 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  // Auth
+
   register: (email, password, displayName) =>
     request('/auth/register', {
       method: 'POST',
@@ -39,7 +39,6 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  // Friends
   getFriends: () => request('/friends'),
   getFriendRequests: () => request('/friends/requests'),
   sendFriendRequest: (email) =>
@@ -54,11 +53,9 @@ export const api = {
   removeFriend: (friendUserId) =>
     request(`/friends/${friendUserId}`, { method: 'DELETE' }),
 
-  // History
   getHistory: () => request('/history'),
   logHistory: (data) => request('/history', { method: 'POST', body: JSON.stringify(data) }),
 
-  // Notifications
   getNotifications: (params = {}) => {
     const query = new URLSearchParams(params).toString();
     return request(`/notifications${query ? `?${query}` : ''}`);
@@ -69,4 +66,4 @@ export const api = {
   deleteNotification: (id) => request(`/notifications/${id}`, { method: 'DELETE' }),
 };
 
-export const updateProfile = (data) => api.updateProfile(data);
+export const updateProfile = (data) => api.updateProfile(data);
